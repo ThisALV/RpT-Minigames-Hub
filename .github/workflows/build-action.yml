@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ["ubuntu-18.04", "ubuntu-20.04", "windows-latest"]
+    runs-on: ${{matrix.platform}}
+    name: ${{matrix.platform}} build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Generate distribution packages
+        run: python3 -m build
+
+      - name: Install unit testing framework (dev only, not in requirements)
+        run: pip3 install pytest-xdist
+
+      - name: Install local package
+        run: pip3 install .
+
+      - name: Run tests
+        run: pytest -n auto tests
+  publish: # If pushed on stable branch, then a new release has been done and must be published if all tests passed successfully
+    if: endsWith(${{github.ref}}, "stable") # Expects ref to be ref/heads/stable
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Generate distribution packages
+        run: python3 -m build
+
+      - name: Publish built packaages
+        uses: pypa/gh-action-pypi-publish
+        with:
+          user: __token__
+          password: ${{secrets.PYPI_API_TOKEN}}
