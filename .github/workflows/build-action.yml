@@ -9,21 +9,35 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-18.04", "ubuntu-20.04", "windows-latest"]
-    runs-on: ${{matrix.platform}}
-    name: ${{matrix.platform}} build
+        platform: # Python executables might differ depending on running platform
+        - name: "ubuntu-18.04"
+          python: "python3"
+          pip: "pip3"
+        - name: "ubuntu-20.04"
+          python: "python3"
+          pip: "pip3"
+          # On Windows, build operation uses tmp virtual envs which don't have a python3.exe file, and as build use the invoked interpreter
+          # to select command to run inside these virtual envs, we need to call for just python running at least 3.7 on this hosted runner
+        - name: "windows-latest"
+          python: "python"
+          pip: "pip"
+    runs-on: ${{matrix.platform.name}}
+    name: ${{matrix.platform.name}} build
+    env:
+      PYTHON_EXEC: ${{matrix.platform.python}}
+      PIP_EXEC: ${{matrix.platform.pip}}
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
       - name: Install unit testing framework and build command (dev only, not in requirements)
-        run: pip3 install pytest-xdist build
+        run: ${PIP_EXEC} install pytest-xdist build
 
       - name: Generate distribution packages
-        run: python3 -m build
+        run: ${PYTHON_EXEC} -m build
 
       - name: Install local package
-        run: pip3 install .
+        run: ${PIP_EXEC} install .
 
       - name: Run tests
         run: pytest -n auto tests
