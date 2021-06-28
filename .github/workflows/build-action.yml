@@ -10,9 +10,11 @@ jobs:
       fail-fast: false
       matrix:
         platform: # Python executables might differ depending on running platform
+          # On Ubuntu 18.04, default python3 is 3.6 < 3.7, so we'll need to call python modules through python3.7 so the correct version
+          # will be executed
         - name: "ubuntu-18.04"
-          python: "python3"
-          pip: "pip3"
+          python: "python3.7"
+          pip: "python3.7 -m pip"
         - name: "ubuntu-20.04"
           python: "python3"
           pip: "pip3"
@@ -26,6 +28,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+
+      - name: Upgrade to Python 3.7 if required # Default python3 for Ubuntu 18.04 is 3.6
+        if: ${{matrix.platform.name}} == "ubuntu-18.04"
+        run: sudo apt-get install -y python3.7
+
+      - name: Upgrade pip if required # On Ubuntu 18.04, pip default version is outdated and doesn't support setup.cfg
+        if: ${{matrix.platform.name}} == "ubuntu-18.04"
+        run: ${{matrix.platform.pip}} install pip
 
       - name: Install unit testing framework and build command (dev only, not in requirements)
         run: ${{matrix.platform.pip}} install pytest-xdist build
@@ -42,6 +52,7 @@ jobs:
     if: endsWith(${{github.ref}}, "stable") # Expects ref to be ref/heads/stable
     needs: build
     runs-on: ubuntu-latest
+    name: Publish if it is a new release
     steps:
       - name: Checkout
         uses: actions/checkout@v2
