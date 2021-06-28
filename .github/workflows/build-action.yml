@@ -16,11 +16,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Install unit testing framework and build command (dev only, not in requirements)
+        run: pip3 install pytest-xdist build
+
       - name: Generate distribution packages
         run: python3 -m build
-
-      - name: Install unit testing framework (dev only, not in requirements)
-        run: pip3 install pytest-xdist
 
       - name: Install local package
         run: pip3 install .
