@@ -23,21 +23,18 @@ jobs:
           pip: "pip"
     runs-on: ${{matrix.platform.name}}
     name: ${{matrix.platform.name}} build
-    env:
-      PYTHON_EXEC: ${{matrix.platform.python}}
-      PIP_EXEC: ${{matrix.platform.pip}}
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
       - name: Install unit testing framework and build command (dev only, not in requirements)
-        run: ${PIP_EXEC} install pytest-xdist build
+        run: ${{matrix.platform.pip}} install pytest-xdist build
 
       - name: Generate distribution packages
-        run: ${PYTHON_EXEC} -m build
+        run: ${{matrix.platform.python}} -m build
 
       - name: Install local package
-        run: ${PIP_EXEC} install .
+        run: ${{matrix.platform.pip}} install .
 
       - name: Run tests
         run: pytest -n auto tests
