@@ -1,0 +1,34 @@
+{
+  "servers": [
+    {
+      "name": "Açores #1",
+      "game": "a",
+      "port": 35555
+    },
+    {
+      "name": "Açores #2",
+      "game": "a",
+      "port": 35556
+    },
+    {
+      "name": "Bermudes #1",
+      "game": "b",
+      "port": 35557
+    },
+    {
+      "name": "Bermudes #2",
+      "game": "b",
+      "port": 35558
+    },
+    {
+      "name": "Canaries #1",
+      "game": "c",
+      "port": 35559
+    },
+    {
+      "name": "Canaries #2",
+      "game": "c",
+      "port": 35560
+    }
+  ]
+}
