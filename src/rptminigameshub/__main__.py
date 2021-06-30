@@ -105,6 +105,7 @@ async def main(argv: "list[str]"):
         # Configures periodic checkout with created ports list to start it later
         updater = rptminigameshub.checkout.StatusUpdater(checkouts_interval, local_ports(servers), current_servers_status)
 
+        logger.info("Start hub server.")
         await run_server(updater)
 
 
