@@ -7,6 +7,7 @@ import rptminigameshub.checkout
 import rptminigameshub.network
 import ssl
 import signal
+import os
 
 
 # Relative path from this module to access servers list
@@ -33,18 +34,55 @@ async def run_until_stopped(updater_task: asyncio.Task):
     updater_task.cancel()  # Avoids checkouts to repeat indefinitely even if server has been stopped
 
 
-async def main(argv: 'list[str]'):
+def load_servers_data(data_path: os.PathLike):
+    """Returns servers list parsed from JSON data of property "servers" for file at given location."""
+
+    # Tries to open file in read-only mode
+    with open(data_path, "r") as file:
+        return json.load(file)["servers"]  # Retrieves "servers" field, return will make file to be closed as we're inside a with-context
+
+
+def make_security_context(certificate_path: os.PathLike, private_key_path: os.PathLike) -> ssl.SSLContext:
+    """Returns a configured TLS features context for a TLS certified server loading cert and privkey at given locations."""
+
+    security_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    security_ctx.load_cert_chain(certificate_path, private_key_path)
+
+    return security_ctx
+
+
+def local_ports(servers_list) -> "list[int]":
+    """Maps given JSON servers array into a server ports list using "port" property."""
+
+    return [game_server["port"] for game_server in servers_list]
+
+
+async def run_server(updater: rptminigameshub.checkout.StatusUpdater):
+    """Runs event's main loop until SIGINT is handled or until status updater crashes, will throw if it happens."""
+
+    # Stops the server when Ctrl+C is hit
+    asyncio.get_running_loop().add_signal_handler(signal.SIGINT, require_stop)
+    # Runs server until it is stopped by Ctrl+C OR until status checkout crashes
+    updater_task = asyncio.create_task(updater.start())  # Must be cancellable if server stops
+    wait_for_sigint_task = asyncio.create_task(run_until_stopped(updater_task))
+    try:  # Handle case where updater_task is cancelled
+        await asyncio.gather(wait_for_sigint_task, updater_task)
+    except asyncio.CancelledError as cancellation_err:
+        if not updater_task.cancelled() and stop_required.is_set():  # If stopped, it is perfectly normal that checkouts have been cancelled
+            logger.info("Server stopped.")
+        else:  # If still running, then it is an error and server must be closed by stopping the event's loop when leaving main() coroutine
+            raise cancellation_err
+
+
+async def main(argv: "list[str]"):
     """Parses command line options and servers list data, then checkout on given delay basis servers inside list to provides clients connected to given
     local port."""
 
     servers_list_path = pathlib.PurePath(__file__).joinpath(SERVERS_LIST_RELATIVE_PATH)
-    logger.debug(f"Parsing servers list from {servers_list_path}...")
-
+    logger.debug(f"Loading servers list from {servers_list_path}...")
     # Tries to open servers list data from current module file using paths concatenation
-    with open(servers_list_path, "r") as servers_list_file:
-        servers = json.load(servers_list_file)["servers"]  # Loads servers list from open stream
-
-    logger.debug("Parsed servers list.")
+    servers = load_servers_data(servers_list_path)
+    logger.debug("Loaded servers list.")
 
     # Tries to parse port number, certificate and private key file, and checkouts interval in milliseconds
     logger.debug("Parsing command line options...")
@@ -59,29 +97,15 @@ async def main(argv: 'list[str]'):
 
     # Configures SSL features for a TLS-based server with parsed options
     logger.debug(f"Configuring context for TLS crt at {certificate_path} and for private key at {privkey_path}...")
-    security_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    security_ctx.load_cert_chain(certificate_path, privkey_path)
+    security_ctx = make_security_context(pathlib.PurePath(certificate_path), pathlib.PurePath(privkey_path))
     logger.debug("Security context configured.")
 
     # Starts hub server listening clients and automatically closes it when program stops
     async with rptminigameshub.network.ClientsListener(port, security_ctx, current_servers_status):
-        # Obtains local servers port list from loaded servers data
-        local_servers = [game_server["port"] for game_server in servers]
         # Configures periodic checkout with created ports list to start it later
-        updater = rptminigameshub.checkout.StatusUpdater(checkouts_interval, local_servers, current_servers_status)
+        updater = rptminigameshub.checkout.StatusUpdater(checkouts_interval, local_ports(servers), current_servers_status)
 
-        # Stops the server when Ctrl+C is hit
-        asyncio.get_running_loop().add_signal_handler(signal.SIGINT, require_stop)
-        # Runs server until it is stopped by Ctrl+C OR until status checkout crashes
-        updater_task = asyncio.create_task(updater.start())  # Must be cancellable if server stops
-        wait_for_sigint_task = asyncio.create_task(run_until_stopped(updater_task))
-        try:  # Handle case where updater_task is cancelled
-            await asyncio.gather(wait_for_sigint_task, updater_task)
-        except asyncio.CancelledError as cancellation_err:
-            if not updater_task.cancelled() and stop_required.is_set():  # If stopped, it is perfectly normal that checkouts have been cancelled
-                logger.info("Server stopped.")
-            else:  # If still running, then it is an error and server must be closed by stopping the event's loop when leaving main() coroutine
-                raise cancellation_err
+        await run_server(updater)
 
 
 try:
