@@ -1,7 +1,10 @@
 from rptminigameshub.__main__ import *
 import rptminigameshub.__main__
+import rptminigameshub.checkout
 import asyncio
 import pytest
+import pathlib
+import json.encoder
 
 
 class TestMain:
@@ -50,3 +53,90 @@ class TestMain:
 
         assert rptminigameshub.__main__.stop_required.is_set()  # Should have been finally set because run_until_stopped() returned
         mocked_updater_task_cancel.assert_called_once()  # run_until_stopped() should have cancelled checkouts when server is stopped
+
+    def test_load_servers_data(self, mocker):
+        # Mocks open() to spy it without performing OS calls but still returning a spied file object
+        mocked_file = mocker.patch("io.IOBase")
+        mocker.patch("builtins.open", return_value=mocked_file)
+        # Mocks a json loading using string instead, so we can control the mocked servers.json content and still manipulate
+        # an "original" json returned object (for this program, only port property is required for server to be working)
+        mocker.patch("json.load", return_value=json.loads("""
+            {
+                "servers": [
+                    { "port": 35555 },
+                    { "port": 35557 },
+                    { "port": 35559 },
+                    { "port": 35561 }
+                ]
+            }
+        """))
+
+        servers = load_servers_data(pathlib.PurePath("data/servers.json"))
+
+        # Data file should have been open and closed
+        mocked_file.__enter__.assert_called_once()
+        mocked_file.__exit__.assert_called_once()
+
+        assert servers == [  # JSON content should have been parsed to give the servers property array
+            {"port": 35555},
+            {"port": 35557},
+            {"port": 35559},
+            {"port": 35561},
+        ]
+
+    def test_local_ports(self):
+        testing_servers_1 = json.loads("""
+            [
+                { "port": 35555 },
+                { "port": 35557 },
+                { "port": 35559 },
+                { "port": 35561 }
+            ]
+        """)
+
+        testing_servers_2 = json.loads("""
+            [
+                { "name": "Açores",     "port": 35557 },
+                { "name": "Canaries",   "port": 35561 }
+            ]
+        """)
+
+        testing_servers_3 = json.loads("""
+            []
+        """)
+
+        # For each JSON array, checks if every port property of each object element is returned inside list
+        assert local_ports(testing_servers_1) == [35555, 35557, 35559, 35561]
+        assert local_ports(testing_servers_2) == [35557, 35561]
+        assert local_ports(testing_servers_3) == []
+
+    @pytest.mark.asyncio
+    async def test_run_server_updater_crashed(self, mocker, reset_stop_required):
+        mocked_signal_handler = mocker.patch.object(asyncio.get_running_loop(), "add_signal_handler")
+
+        updater_throw = asyncio.Event()  # Will be set when updater.start() mocked coroutine can throw an error
+
+        # Will wait for updater_throw to be set then raises an error
+        async def mocked_start():
+            await updater_throw.wait()
+            raise Exception("A random error")
+
+        mocked_updater = mocker.patch("rptminigameshub.checkout.StatusUpdater")  # Creates a mockable StatusUpdater
+        mocked_updater_start = mocker.patch.object(mocked_updater, "start", wraps=mocked_start)  # On this StatusUpdater, mocks start()
+
+        async def assert_updater_started_crash_it():
+            # Before trying to gather running and updating tasks, we should have prepared a way to stop the running task by handling Ctrl+C
+            mocked_signal_handler.assert_called_once_with(signal.SIGINT, require_stop)
+
+            await asyncio.sleep(0)  # Ensures this coroutines is run after run_server() has begun to be awaiting
+
+            mocked_updater_start.assert_called_once_with()  # Ensures run_server() is awaiting for updater to crash
+            updater_throw.set()  # Causes mocked start() routine to continue execution and throw
+
+        with pytest.raises(asyncio.CancelledError):  # We expect run_server to throw, which will propagates outside asyncio.gather()
+            await asyncio.gather(  # An error will be thrown from updater.start() coroutine while run_server() is awaiting for it
+                asyncio.create_task(run_server(mocked_updater)),
+                asyncio.create_task(assert_updater_started_crash_it())
+            )
+
+        assert not rptminigameshub.__main__.stop_required.is_set()  # Should not have been caused by a server normal stop
