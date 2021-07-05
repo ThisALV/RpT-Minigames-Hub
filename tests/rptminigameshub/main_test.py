@@ -119,7 +119,7 @@ class TestMain:
         # Will wait for updater_throw to be set then raises an error
         async def mocked_start():
             await updater_throw.wait()
-            raise Exception("A random error")
+            raise RuntimeError("A random error")
 
         mocked_updater = mocker.patch("rptminigameshub.checkout.StatusUpdater")  # Creates a mockable StatusUpdater
         mocked_updater_start = mocker.patch.object(mocked_updater, "start", wraps=mocked_start)  # On this StatusUpdater, mocks start()
@@ -133,7 +133,7 @@ class TestMain:
             mocked_updater_start.assert_called_once_with()  # Ensures run_server() is awaiting for updater to crash
             updater_throw.set()  # Causes mocked start() routine to continue execution and throw
 
-        with pytest.raises(asyncio.CancelledError):  # We expect run_server to throw, which will propagates outside asyncio.gather()
+        with pytest.raises(RuntimeError):  # We expect run_server to throw, which will propagates outside asyncio.gather()
             await asyncio.gather(  # An error will be thrown from updater.start() coroutine while run_server() is awaiting for it
                 asyncio.create_task(run_server(mocked_updater)),
                 asyncio.create_task(assert_updater_started_crash_it())
