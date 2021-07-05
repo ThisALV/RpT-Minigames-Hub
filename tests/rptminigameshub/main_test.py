@@ -140,3 +140,36 @@ class TestMain:
             )
 
         assert not rptminigameshub.__main__.stop_required.is_set()  # Should not have been caused by a server normal stop
+
+    @pytest.mark.asyncio
+    async def test_run_server_stopped(self, mocker, reset_stop_required):
+        mocked_signal_handler = mocker.patch.object(asyncio.get_running_loop(), "add_signal_handler")
+
+        # Will wait indefinitely, allowing us to mock Ctrl+C while updating task is emulated and awaited
+        async def mocked_start():
+            await asyncio.Event().wait()  # This event will never be set
+
+        mocked_updater = mocker.patch("rptminigameshub.checkout.StatusUpdater")  # Creates a mockable StatusUpdater
+        mocker.patch.object(mocked_updater, "start", wraps=mocked_start)  # On this StatusUpdater, mocks start()
+
+        # Used to check if server has been started without modifying running task behavior
+        spied_run_until_stopped = mocker.patch("rptminigameshub.__main__.run_until_stopped", wraps=run_until_stopped)
+
+        async def assert_server_run_stop_it():
+            # Before trying to gather running and updating tasks, we should have prepared a way to stop the running task by handling Ctrl+C
+            mocked_signal_handler.assert_called_once_with(signal.SIGINT, require_stop)
+
+            await asyncio.sleep(0)  # Ensures this coroutines is run after run_until_stopped() launched by run_server() is awaiting for stop
+
+            spied_run_until_stopped.assert_called_once()  # Ensures run_server() is running run_until_stopped task, also called running task
+            rptminigameshub.__main__.stop_required.set()  # Now stops the server
+
+        await asyncio.gather(  # Starts server, running task will be stopped when assert_server_run_stop_it will set the Event
+            asyncio.create_task(run_server(mocked_updater)),
+            asyncio.create_task(assert_server_run_stop_it())
+        )
+
+        assert rptminigameshub.__main__.stop_required.is_set()  # Checks for running step to have been stopped because of appropriate Event
+        # Then an error will be thrown if unit test exits with running or updating task still pending, otherwise if both are cancelled
+        # that means it completed gracefully
+
