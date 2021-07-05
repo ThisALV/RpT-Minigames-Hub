@@ -65,13 +65,17 @@ async def run_server(updater: rptminigameshub.checkout.StatusUpdater):
     # Runs server until it is stopped by Ctrl+C OR until status checkout crashes
     updater_task = asyncio.create_task(updater.start())  # Must be cancellable if server stops
     wait_for_sigint_task = asyncio.create_task(run_until_stopped(updater_task))
-    try:  # Handle case where updater_task is cancelled
-        await asyncio.gather(wait_for_sigint_task, updater_task)
-    except asyncio.CancelledError as cancellation_err:
-        if not updater_task.cancelled() and stop_required.is_set():  # If stopped, it is perfectly normal that checkouts have been cancelled
-            logger.info("Server stopped.")
-        else:  # If still running, then it is an error and server must be closed by stopping the event's loop when leaving main() coroutine
-            raise cancellation_err
+    try:  # Handles case where one of the two tasks stops unexpectedly
+        try:  # Handles case where updater_task is cancelled
+            await asyncio.gather(wait_for_sigint_task, updater_task)
+        except asyncio.CancelledError as cancellation_err:
+            if not updater_task.cancelled() and stop_required.is_set():  # If stopped, it is perfectly normal that checkouts have been cancelled
+                logger.info("Server stopped.")
+            else:  # If still running, then this error must be raised to be handled as unexpected
+                raise cancellation_err
+    finally:  # Ensures both tasks will be stop before program to avoid destroying them as pending
+        updater_task.cancel()
+        wait_for_sigint_task.cancel()
 
 
 async def main(argv: "list[str]"):
