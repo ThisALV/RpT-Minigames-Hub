@@ -237,6 +237,9 @@ class TestMain:
 
     @pytest.mark.asyncio
     async def test_main(self, mocker, reset_stop_required):
+        # Avoid to really catch system signals on testing
+        mocker.patch.object(asyncio.get_running_loop(), "add_signal_handler")
+
         # Fake command line arguments
         port_arg = "3555"
         certificate_arg = "/path/to/crt.crt"
