@@ -27,11 +27,12 @@ def require_stop():
     stop_required.set()
 
 
-async def run_until_stopped(updater_task: asyncio.Task):
-    """Awaits stop event to run event's loop until server stop is required by Ctrl+C. When stopped, cancels given updater task."""
+async def run_until_stopped(serving_task: asyncio.Task, updater_task: asyncio.Task):
+    """Awaits stop event to run event's loop until server stop is required by Ctrl+C. When stopped, cancels given updater and server tasks."""
 
     await stop_required.wait()
     updater_task.cancel()  # Avoids checkouts to repeat indefinitely even if server has been stopped
+    serving_task.cancel()
 
 
 def load_servers_data(data_path: os.PathLike):
@@ -57,27 +58,30 @@ def local_ports(servers_list) -> "list[int]":
     return [game_server["port"] for game_server in servers_list]
 
 
-async def run_server(updater: rptminigameshub.checkout.StatusUpdater):
-    """Runs event's main loop until SIGINT is handled or until status updater crashes, will throw if it happens."""
+async def run_server(server: rptminigameshub.network.ClientsListener, updater: rptminigameshub.checkout.StatusUpdater):
+    """Runs event's main loop for serving, SIGINT listening and updating tasks until SIGINT is handled or until status updater crashes,
+    will throw if it happens."""
 
     # Stops the server when Ctrl+C is hit
     asyncio.get_running_loop().add_signal_handler(signal.SIGINT, require_stop)
     # Runs server until it is stopped by Ctrl+C OR until status checkout crashes
+    serving_task = asyncio.create_task(server.start())
     updater_task = asyncio.create_task(updater.start())  # Must be cancellable if server stops
-    wait_for_sigint_task = asyncio.create_task(run_until_stopped(updater_task))  # Must be cancellable if server stops
+    wait_for_sigint_task = asyncio.create_task(run_until_stopped(serving_task, updater_task))  # Must be cancellable if server stops
 
     stopped_gracefully = False  # Set to True when finally clause is reach, means it is normal if coroutine tasks are cancelled
     try:  # Handles case where one of the two tasks stops unexpectedly
         try:  # Handles case where updater_task is cancelled
-            await asyncio.gather(wait_for_sigint_task, updater_task)
+            await asyncio.gather(wait_for_sigint_task, updater_task, serving_task)
         except asyncio.CancelledError:
-            # If updater_task has been cancelled but not from final clause or running task post-await statement,
+            # If updater_task or serving_task have been cancelled but not from final clause or running task post-await statement,
             # then this CancelledError is unexpected and must be propagated
-            if not stopped_gracefully and updater_task.cancelled() and not wait_for_sigint_task.done():  # End of running task: updating is cancelled
+            if not stopped_gracefully and (updater_task.cancelled() and serving_task.cancelled()) and not wait_for_sigint_task.done():  # End of running task: updating is cancelled
                 raise
     finally:  # Ensures both tasks will be stop before program to avoid destroying them as pending
         stopped_gracefully = True  # Cancelling tasks will cause them to raise a CancelledError, we notifies except clause it is expected
         # Gracefully shutdown
+        serving_task.cancel()
         updater_task.cancel()
         wait_for_sigint_task.cancel()
 
@@ -108,13 +112,13 @@ async def main(argv: "list[str]"):
     security_ctx = make_security_context(pathlib.PurePath(certificate_path), pathlib.PurePath(privkey_path))
     logger.debug("Security context configured.")
 
-    # Starts hub server listening clients and automatically closes it when program stops
-    async with rptminigameshub.network.ClientsListener(port, security_ctx, current_servers_status):
-        # Configures periodic checkout with created ports list to start it later
-        updater = rptminigameshub.checkout.StatusUpdater(checkouts_interval, local_ports(servers), current_servers_status)
+    # Configures periodic checkout with created ports list to start it later
+    updater = rptminigameshub.checkout.StatusUpdater(checkouts_interval, local_ports(servers), current_servers_status)
+    # Configures server with listening port and configured TLS features
+    server = rptminigameshub.network.ClientsListener(port, security_ctx, current_servers_status)
 
-        logger.info("Start hub server.")
-        await run_server(updater)
+    logger.info("Start hub server.")
+    await run_server(server, updater)
 
 
 try:

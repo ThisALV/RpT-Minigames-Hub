@@ -15,10 +15,6 @@ class ClientsListener:
         from given source Subject."""
         pass
 
-    async def __aenter__(self):
-        """Starts a WSS server with instance configuration. Current asyncio event's loop must be run after this call to handle new connections."""
-        pass
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Stops currently open WSS server."""
+    async def start(self):
+        """Starts a WSS server with instance configuration. Will automatically closes WSS server when exited."""
         pass
