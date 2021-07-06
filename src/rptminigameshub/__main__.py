@@ -64,16 +64,19 @@ async def run_server(updater: rptminigameshub.checkout.StatusUpdater):
     asyncio.get_running_loop().add_signal_handler(signal.SIGINT, require_stop)
     # Runs server until it is stopped by Ctrl+C OR until status checkout crashes
     updater_task = asyncio.create_task(updater.start())  # Must be cancellable if server stops
-    wait_for_sigint_task = asyncio.create_task(run_until_stopped(updater_task))
+    wait_for_sigint_task = asyncio.create_task(run_until_stopped(updater_task))  # Must be cancellable if server stops
+
+    stopped_gracefully = False  # Set to True when finally clause is reach, means it is normal if coroutine tasks are cancelled
     try:  # Handles case where one of the two tasks stops unexpectedly
         try:  # Handles case where updater_task is cancelled
             await asyncio.gather(wait_for_sigint_task, updater_task)
-        except asyncio.CancelledError as cancellation_err:
-            if not updater_task.cancelled() and stop_required.is_set():  # If stopped, it is perfectly normal that checkouts have been cancelled
-                logger.info("Server stopped.")
-            else:  # If still running, then this error must be raised to be handled as unexpected
-                raise cancellation_err
+        except asyncio.CancelledError:
+            # If updater_task has been cancelled but not from final clause, then this CancelledError is unexpected and must be propagated
+            if not stopped_gracefully and updater_task.cancelled():
+                raise
     finally:  # Ensures both tasks will be stop before program to avoid destroying them as pending
+        stopped_gracefully = True  # Cancelling tasks will cause them to raise a CancelledError, we notifies except clause it is expected
+        # Gracefully shutdown
         updater_task.cancel()
         wait_for_sigint_task.cancel()
 
