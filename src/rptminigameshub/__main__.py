@@ -8,6 +8,7 @@ import rptminigameshub.network
 import ssl
 import signal
 import os
+import typing
 
 
 # Relative path from this module to access servers list
@@ -16,8 +17,8 @@ SERVERS_LIST_RELATIVE_PATH = "data/servers.json"
 # Initializes and retrieves this module logger
 logger = logging.getLogger(__name__)
 
-# Fired when Ctrl+C is hit to stop the server
-stop_required = asyncio.Event()
+# Asyncio Event: Fired when Ctrl+C is hit to stop the server, will be initialized when we are inside an Asyncio event's loop
+stop_required: "typing.Union[asyncio.Event, None]" = None
 
 
 def require_stop():
@@ -89,6 +90,9 @@ async def run_server(server: rptminigameshub.network.ClientsListener, updater: r
 async def main(argv: "list[str]"):
     """Parses command line options and servers list data, then checkout on given delay basis servers inside list to provides clients connected to given
     local port."""
+
+    global stop_required  # Assigns this global variable from our event's loop coroutine
+    stop_required = asyncio.Event()  # Now, as we're inside an event's loop, we can initialize this Event
 
     servers_list_path = pathlib.PurePath(__file__).parent.joinpath(SERVERS_LIST_RELATIVE_PATH)
     logger.debug(f"Loading servers list from {servers_list_path}...")

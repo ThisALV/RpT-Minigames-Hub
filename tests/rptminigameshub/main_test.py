@@ -20,6 +20,9 @@ class TestMain:
         mocker.patch.object(rptminigameshub.__main__, "stop_required", asyncio.Event())
 
     def test_require_stop(self, mocker):
+        # Initializes a temporary Event object to test this function, we're not inside an async context so object event's loop doesn't matter
+        rptminigameshub.__main__.stop_required = asyncio.Event()
+
         mocked_print = mocker.patch("builtins.print")
         mocked_event_set = mocker.patch("asyncio.Event.set")
 
@@ -236,7 +239,10 @@ class TestMain:
         # that means it completed gracefully
 
     @pytest.mark.asyncio
-    async def test_main(self, mocker, reset_stop_required):
+    async def test_main(self, mocker):
+        # This global variable is initialized to None inside __main__ module
+        rptminigameshub.__main__.stop_required = None
+
         # Avoid to really catch system signals on testing
         mocker.patch.object(asyncio.get_running_loop(), "add_signal_handler")
 
@@ -266,6 +272,8 @@ class TestMain:
         async def assert_server_started_then_stop_it():
             await asyncio.sleep(0)  # Ensures this coroutine is running when run_server() is already awaiting
 
+            # Checks for server setup to have initialized the stop event with it's event's loop
+            assert rptminigameshub.__main__.stop_required._loop is asyncio.get_running_loop()
             # Checks for server setup to have been done correctly
             mocked_data_loader.assert_called_once_with(pathlib.PurePath("/home/test/some-dir/data/servers.json"))
 
@@ -275,6 +283,8 @@ class TestMain:
 
             # Then stops server
             require_stop()
+
+        assert rptminigameshub.__main__.stop_required is None  # At program initialization, there's no event's loop so stop event is None
 
         await asyncio.gather(  # Starts main, then when server is expected to run, checks if it is the case
             asyncio.create_task(main(fake_argv)),
