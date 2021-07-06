@@ -90,7 +90,7 @@ async def main(argv: "list[str]"):
     """Parses command line options and servers list data, then checkout on given delay basis servers inside list to provides clients connected to given
     local port."""
 
-    servers_list_path = pathlib.PurePath(__file__).joinpath(SERVERS_LIST_RELATIVE_PATH)
+    servers_list_path = pathlib.PurePath(__file__).parent.joinpath(SERVERS_LIST_RELATIVE_PATH)
     logger.debug(f"Loading servers list from {servers_list_path}...")
     # Tries to open servers list data from current module file using paths concatenation
     servers = load_servers_data(servers_list_path)
