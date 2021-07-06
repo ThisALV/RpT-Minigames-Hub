@@ -38,7 +38,7 @@ jobs:
         run: ${{matrix.platform.pip}} install pip
 
       - name: Install unit testing framework and build command (dev only, not in requirements)
-        run: ${{matrix.platform.pip}} install pytest-xdist build
+        run: ${{matrix.platform.pip}} install pytest-xdist pytest-mock pytest-asyncio build
 
       - name: Generate distribution packages
         run: ${{matrix.platform.python}} -m build
