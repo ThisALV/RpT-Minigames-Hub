@@ -162,7 +162,7 @@ class TestMain:
             await asyncio.sleep(0)  # Ensures this coroutines is run after run_until_stopped() launched by run_server() is awaiting for stop
 
             spied_run_until_stopped.assert_called_once()  # Ensures run_server() is running run_until_stopped task, also called running task
-            rptminigameshub.__main__.stop_required.set()  # Now stops the server
+            require_stop()  # Now stops the server
 
         await asyncio.gather(  # Starts server, running task will be stopped when assert_server_run_stop_it will set the Event
             asyncio.create_task(run_server(mocked_updater)),

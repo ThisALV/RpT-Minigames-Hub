@@ -71,8 +71,9 @@ async def run_server(updater: rptminigameshub.checkout.StatusUpdater):
         try:  # Handles case where updater_task is cancelled
             await asyncio.gather(wait_for_sigint_task, updater_task)
         except asyncio.CancelledError:
-            # If updater_task has been cancelled but not from final clause, then this CancelledError is unexpected and must be propagated
-            if not stopped_gracefully and updater_task.cancelled():
+            # If updater_task has been cancelled but not from final clause or running task post-await statement,
+            # then this CancelledError is unexpected and must be propagated
+            if not stopped_gracefully and updater_task.cancelled() and not wait_for_sigint_task.done():  # End of running task: updating is cancelled
                 raise
     finally:  # Ensures both tasks will be stop before program to avoid destroying them as pending
         stopped_gracefully = True  # Cancelling tasks will cause them to raise a CancelledError, we notifies except clause it is expected
