@@ -252,16 +252,13 @@ class TestMain:
         mocker.patch("rptminigameshub.checkout.Subject")
         mocker.patch("ssl.SSLContext")
 
+        async def wait_indefinitely():
+            await asyncio.Event().wait()  # This will never be set, causing coroutine to await forever
+
         # Spies these function to check if SIGINT listening, clients serving and updating tasks are both started as expected when server
-        # is running
-        mocked_updater = mocker.patch.object(
-            rptminigameshub.checkout.StatusUpdater,
-            "start", wraps=rptminigameshub.checkout.StatusUpdater.start
-        )  # Doesn't change implementation but spies calls
-        mocked_server = mocker.patch.object(
-            rptminigameshub.network.ClientsListener,
-            "start", wraps=rptminigameshub.network.ClientsListener.start
-        )  # Same thing for serving task
+        # is running, and suppress their implementation to avoid heavy IO operations to take place during this unit test
+        mocked_updater = mocker.patch.object(rptminigameshub.checkout.StatusUpdater, "start", wraps=wait_indefinitely)
+        mocked_server = mocker.patch.object(rptminigameshub.network.ClientsListener, "start", wraps=wait_indefinitely)
 
         async def assert_server_started_then_stop_it():
             await asyncio.sleep(0)  # Ensures this coroutine is running when run_server() is already awaiting
