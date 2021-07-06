@@ -126,8 +126,9 @@ async def main(argv: "list[str]"):
     logger.info("Stopped hub server.")
 
 
-try:
-    asyncio.run(main(sys.argv))  # Runs program in asyncio single thread event's loop
-except Exception as err:  # Print errors with application logging instead of raw stacktrace
-    logger.critical(f"Fatal: {type(err).__name__} {err.args[0]}")
-    exit(1)
+if __name__ == "__main__":
+    try:
+        asyncio.run(main(sys.argv))  # Runs program in asyncio single thread event's loop
+    except Exception as err:  # Print errors with application logging instead of raw stacktrace
+        logger.critical(f"Fatal: {type(err).__name__} {err.args[0]}")
+        exit(1)
