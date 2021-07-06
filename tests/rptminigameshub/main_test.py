@@ -234,3 +234,51 @@ class TestMain:
         assert rptminigameshub.__main__.stop_required.is_set()  # Checks for running step to have been stopped because of appropriate Event
         # Then an error will be thrown if unit test exits with running or updating task still pending, otherwise if both are cancelled
         # that means it completed gracefully
+
+    @pytest.mark.asyncio
+    async def test_main(self, mocker, reset_stop_required):
+        # Fake command line arguments
+        port_arg = "3555"
+        certificate_arg = "/path/to/crt.crt"
+        privkey_arg = "/path/to/key.key"
+        checkout_interval_arg = "5000"
+        # Emulates arguments array using appropriate arg order, 1st elem doesn't matter as it should contain the unused started program path
+        fake_argv = ["", port_arg, certificate_arg, privkey_arg, checkout_interval_arg]
+
+        mocker.patch.object(rptminigameshub.__main__, "__file__", "/home/test/some-dir/__main__.py")  # Emulates a fake startup script file used to forms up relative paths
+        mocked_data_loader = mocker.patch("rptminigameshub.__main__.load_servers_data")  # Used to retrieved path for data servers file
+
+        # Mocks Subject and SSLContext because we just want to test server setting up here, so we don't want real objects to be created
+        mocker.patch("rptminigameshub.checkout.Subject")
+        mocker.patch("ssl.SSLContext")
+
+        # Spies these function to check if SIGINT listening, clients serving and updating tasks are both started as expected when server
+        # is running
+        mocked_updater = mocker.patch.object(
+            rptminigameshub.checkout.StatusUpdater,
+            "start", wraps=rptminigameshub.checkout.StatusUpdater.start
+        )  # Doesn't change implementation but spies calls
+        mocked_server = mocker.patch.object(
+            rptminigameshub.network.ClientsListener,
+            "start", wraps=rptminigameshub.network.ClientsListener.start
+        )  # Same thing for serving task
+
+        async def assert_server_started_then_stop_it():
+            await asyncio.sleep(0)  # Ensures this coroutine is running when run_server() is already awaiting
+
+            # Checks for server setup to have been done correctly
+            mocked_data_loader.assert_called_once_with(pathlib.PurePath("/home/test/some-dir/data/servers.json"))
+
+            # Checks for server tasks to be running
+            mocked_updater.assert_called_once()
+            mocked_server.assert_called_once()
+
+            # Then stops server
+            require_stop()
+
+        await asyncio.gather(  # Starts main, then when server is expected to run, checks if it is the case
+            asyncio.create_task(main(fake_argv)),
+            asyncio.create_task(assert_server_started_then_stop_it())
+        )
+
+        # Will throw an exception if some tasks are still pending at this point
