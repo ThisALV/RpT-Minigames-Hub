@@ -126,3 +126,4 @@ try:
     asyncio.run(main(sys.argv))  # Runs program in asyncio single thread event's loop
 except Exception as err:  # Print errors with application logging instead of raw stacktrace
     logger.critical(f"Fatal: {type(err).__name__} {err.args[0]}")
+    exit(1)
