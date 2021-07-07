@@ -15,14 +15,17 @@ jobs:
         - name: "ubuntu-18.04"
           python: "python3.7"
           pip: "python3.7 -m pip"
+          sudo: "sudo"
         - name: "ubuntu-20.04"
           python: "python3"
           pip: "pip3"
+          sudo: "sudo"
           # On Windows, build operation uses tmp virtual envs which don't have a python3.exe file, and as build use the invoked interpreter
           # to select command to run inside these virtual envs, we need to call for just python running at least 3.7 on this hosted runner
         - name: "windows-latest"
           python: "python"
           pip: "pip"
+          sudo: ""  # On Windows, sudo isn't available, so we just don't call it as everything will run as User mode
     runs-on: ${{matrix.platform.name}}
     name: ${{matrix.platform.name}} build
     steps:
@@ -51,12 +54,12 @@ jobs:
 
       - name: Create TLS certificate and private key
         run: >
-          sudo openssl req -batch -x509 -newkey rsa:2048
-          -keyout ~/localhost.key -out ~/localhost.pem -nodes -days 1
+          ${{matrix.platform.sudo}} openssl req -batch -x509 -newkey rsa:2048
+          -keyout localhost.key -out localhost.pem -nodes -days 1
           -subj "/CN=localhost"
 
       - name: Dry run
-        run: ${{matrix.platform.python}} -m rptminigameshub 35550 ~/localhost.key ~/localhost.pem 2000 --dry-run
+        run: ${{matrix.platform.python}} -m rptminigameshub 35550 localhost.key localhost.pem 2000 --dry-run
   publish: # If pushed on stable branch, then a new release has been done and must be published if all tests passed successfully
     if: endsWith(github.ref, 'stable') # Expects ref to be ref/heads/stable
     needs: build
