@@ -16,6 +16,13 @@ CWD = pathlib.PurePath(os.getcwd())
 # Relative path from this module to access servers list
 SERVERS_LIST_RELATIVE_PATH = "data/servers.json"
 
+# Sets application logging level to debug, with required format containing date-time, level and module, then prints this into stdout instead
+# of stderr
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="[%(asctime)s/%(levelname)s] %(module)s : %(message)s",
+    stream=sys.stdout
+)
 # Initializes and retrieves this module logger
 logger = logging.getLogger(__name__)
 
