@@ -48,6 +48,15 @@ jobs:
 
       - name: Run tests
         run: pytest -n auto tests
+
+      - name: Create TLS certificate and private key
+        run: >
+          sudo openssl req -batch -x509 -newkey rsa:2048
+          -keyout ~/localhost.key -out ~/localhost.pem -nodes -days 1
+          -subj "/CN=localhost"
+
+      - name: Dry run
+        run: ${{matrix.platform.python}} -m rptminigameshub 35550 ~/localhost.key ~/localhost.pem 2000 --dry-run
   publish: # If pushed on stable branch, then a new release has been done and must be published if all tests passed successfully
     if: endsWith(github.ref, 'stable') # Expects ref to be ref/heads/stable
     needs: build
