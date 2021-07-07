@@ -310,3 +310,9 @@ class TestMain:
         )
 
         # Will throw an exception if some tasks are still pending at this point
+
+    def test_handle_relative_path(self, mocker):
+        mocker.patch("rptminigameshub.__main__.CWD", pathlib.PurePath("/home/test"))  # Mocks a Current Working Directory inside ~ home directory
+
+        assert handle_relative_path("/home/test/file.txt") == pathlib.PurePath("/home/test/file.txt")
+        assert handle_relative_path("../test2/file.txt") == pathlib.PurePath("/home/test/../test2/file.txt")

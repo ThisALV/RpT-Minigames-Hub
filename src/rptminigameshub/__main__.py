@@ -11,6 +11,8 @@ import os
 import typing
 
 
+# Current working directory, loaded once to use it inside handle_relative_path()
+CWD = pathlib.PurePath(os.getcwd())
 # Relative path from this module to access servers list
 SERVERS_LIST_RELATIVE_PATH = "data/servers.json"
 
@@ -98,6 +100,17 @@ async def run_server(server: rptminigameshub.network.ClientsListener, updater: r
         graceful_shutdown()
 
 
+def handle_relative_path(path_representation: str):
+    """If given `path` represents an absolute path, then path is returned as-it.
+    If it represents a relative path, returns an absolute-relative path from current working directory."""
+
+    path = pathlib.PurePath(path_representation)  # Creates a path with path-specific properties
+    if path.is_absolute():  # Checks if it must be converted to abs or not
+        return path
+    else:  # If must be converted, consider current working directory as its relative-path root
+        return CWD.joinpath(path_representation)
+
+
 async def main(argv: "list[str]"):
     """Parses command line options and servers list data, then checkout on given delay basis servers inside list to provides clients connected to given
     local port."""
@@ -105,6 +118,9 @@ async def main(argv: "list[str]"):
     global stop_required  # Assigns this global variable from our event's loop coroutine
     stop_required = asyncio.Event()  # Now, as we're inside an event's loop, we can initialize this Event
 
+    logger.debug(f"Running from: {CWD}")
+
+    # Package data files are looked up relatively to code parent directory
     servers_list_path = pathlib.PurePath(__file__).parent.joinpath(SERVERS_LIST_RELATIVE_PATH)
     logger.debug(f"Loading servers list from {servers_list_path}...")
     # Tries to open servers list data from current module file using paths concatenation
@@ -125,7 +141,8 @@ async def main(argv: "list[str]"):
 
     # Configures SSL features for a TLS-based server with parsed options
     logger.debug(f"Configuring context for TLS crt at {certificate_path} and for private key at {privkey_path}...")
-    security_ctx = make_security_context(pathlib.PurePath(certificate_path), pathlib.PurePath(privkey_path))
+    # TLS configuration files are looked up relatively to the current working directory
+    security_ctx = make_security_context(handle_relative_path(certificate_path), handle_relative_path(privkey_path))
     logger.debug("Security context configured.")
 
     # Configures periodic checkout with created ports list to start it later
