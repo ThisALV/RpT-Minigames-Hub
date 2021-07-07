@@ -59,9 +59,22 @@ def local_ports(servers_list) -> "list[int]":
     return [game_server["port"] for game_server in servers_list]
 
 
-async def run_server(server: rptminigameshub.network.ClientsListener, updater: rptminigameshub.checkout.StatusUpdater):
+async def run_server(server: rptminigameshub.network.ClientsListener, updater: rptminigameshub.checkout.StatusUpdater, dry_run: bool = False):
     """Runs event's main loop for serving, SIGINT listening and updating tasks until SIGINT is handled or until status updater crashes,
-    will throw if it happens."""
+    will throw if it happens.
+
+    If dry_run is `True`, then this function will immediately return by cancelling all tasks before running them."""
+
+    # Set to True when finally clause is reach or if it is a dry run, means it is normal if coroutine tasks are cancelled
+    stopped_gracefully = False
+
+    def graceful_shutdown():
+        stopped_gracefully = True  # Cancelling tasks will cause them to raise a CancelledError, we notifies except clause it is expected
+
+        # Gracefully stop each running task
+        serving_task.cancel()
+        updater_task.cancel()
+        wait_for_sigint_task.cancel()
 
     # Stops the server when Ctrl+C is hit
     asyncio.get_running_loop().add_signal_handler(signal.SIGINT, require_stop)
@@ -70,9 +83,11 @@ async def run_server(server: rptminigameshub.network.ClientsListener, updater: r
     updater_task = asyncio.create_task(updater.start())  # Must be cancellable if server stops
     wait_for_sigint_task = asyncio.create_task(run_until_stopped(serving_task, updater_task))  # Must be cancellable if server stops
 
-    stopped_gracefully = False  # Set to True when finally clause is reach, means it is normal if coroutine tasks are cancelled
     try:  # Handles case where one of the two tasks stops unexpectedly
         try:  # Handles case where updater_task is cancelled
+            if dry_run:  # For a dry run, gather() will return immediately because every task will already be cancelled
+                graceful_shutdown()
+
             await asyncio.gather(wait_for_sigint_task, updater_task, serving_task)
         except asyncio.CancelledError:
             # If updater_task or serving_task have been cancelled but not from final clause or running task post-await statement,
@@ -80,11 +95,7 @@ async def run_server(server: rptminigameshub.network.ClientsListener, updater: r
             if not stopped_gracefully and (updater_task.cancelled() and serving_task.cancelled()) and not wait_for_sigint_task.done():  # End of running task: updating is cancelled
                 raise
     finally:  # Ensures both tasks will be stop before program to avoid destroying them as pending
-        stopped_gracefully = True  # Cancelling tasks will cause them to raise a CancelledError, we notifies except clause it is expected
-        # Gracefully shutdown
-        serving_task.cancel()
-        updater_task.cancel()
-        wait_for_sigint_task.cancel()
+        graceful_shutdown()
 
 
 async def main(argv: "list[str]"):
@@ -106,6 +117,7 @@ async def main(argv: "list[str]"):
     certificate_path = argv[2]
     privkey_path = argv[3]
     checkouts_interval = int(argv[4])
+    dry_run = "--dry-run" in argv  # If this argument is given after the positional args, run_server will immediately return
     logger.debug("Parsed options.")
 
     # Shared between ClientsListener and StatusUpdater to communicates about latest retrieved status
@@ -122,7 +134,7 @@ async def main(argv: "list[str]"):
     server = rptminigameshub.network.ClientsListener(port, security_ctx, current_servers_status)
 
     logger.info("Start hub server.")
-    await run_server(server, updater)
+    await run_server(server, updater, dry_run)
     logger.info("Stopped hub server.")
 
 

@@ -239,6 +239,24 @@ class TestMain:
         # that means it completed gracefully
 
     @pytest.mark.asyncio
+    async def test_run_server_dry_run(self, mocker, reset_stop_required):
+        mocker.patch.object(asyncio.get_running_loop(), "add_signal_handler")
+
+        # Will wait indefinitely, allowing us to mock dry run with tasks that should never finish by themselves
+        async def wait_indefinitely():
+            await asyncio.Event().wait()  # This event will never be set because it cannot be accessed
+
+        mocked_updater = mocker.patch("rptminigameshub.checkout.StatusUpdater")  # Creates a mockable StatusUpdater
+        mocker.patch.object(mocked_updater, "start", wraps=wait_indefinitely)  # On this StatusUpdater, mocks start()
+
+        mocked_server = mocker.patch("rptminigameshub.network.ClientsListener")  # Creates a mockable ClientListener
+        mocker.patch.object(mocked_server, "start", wraps=wait_indefinitely)  # On this ClientListener, mocks start()
+
+        # With that 3rd arg, run_server should immediately stop by itself, so we allow a short delay of 5s before considering this
+        # coroutine will run indefinitely and the test has failed. This also avoid the unit tests suite to block on this unit test.
+        await asyncio.wait_for(run_server(mocked_server, mocked_updater, dry_run=True), 5000)
+
+    @pytest.mark.asyncio
     async def test_main(self, mocker):
         # This global variable is initialized to None inside __main__ module
         rptminigameshub.__main__.stop_required = None
