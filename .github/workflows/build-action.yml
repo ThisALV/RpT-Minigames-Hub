@@ -38,16 +38,16 @@ jobs:
 
       - name: Upgrade pip if required # On Ubuntu 18.04, pip default version is outdated and doesn't support setup.cfg
         if: matrix.platform.name == 'ubuntu-18.04'
-        run: ${{matrix.platform.pip}} install pip
+        run: sudo ${{matrix.platform.pip}} install pip
 
       - name: Install unit testing framework and build command (dev only, not in requirements)
-        run: ${{matrix.platform.pip}} install pytest-xdist pytest-mock pytest-asyncio build
+        run: ${{matrix.platform.sudo}} ${{matrix.platform.pip}} install pytest-xdist pytest-mock pytest-asyncio build
 
       - name: Generate distribution packages
         run: ${{matrix.platform.python}} -m build
 
       - name: Install local package
-        run: ${{matrix.platform.pip}} install .
+        run: ${{matrix.platform.sudo}} ${{matrix.platform.pip}} install .
 
       - name: Run tests
         run: pytest -n auto tests
@@ -59,7 +59,7 @@ jobs:
           -subj "/CN=localhost"
 
       - name: Dry run
-        run: ${{matrix.platform.python}} -m rptminigameshub 35550 localhost.key localhost.pem 2000 --dry-run
+        run: ${{matrix.platform.sudo}} ${{matrix.platform.python}} -m rptminigameshub 35550 localhost.key localhost.pem 2000 --dry-run
   publish: # If pushed on stable branch, then a new release has been done and must be published if all tests passed successfully
     if: endsWith(github.ref, 'stable') # Expects ref to be ref/heads/stable
     needs: build
