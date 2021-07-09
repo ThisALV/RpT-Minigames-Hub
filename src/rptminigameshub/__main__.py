@@ -167,7 +167,10 @@ if __name__ == "__main__":
     try:
         asyncio.run(main(sys.argv))  # Runs program in asyncio single thread event's loop
     except Exception as err:  # Print errors with application logging instead of raw stacktrace
-        logger.critical(f"Fatal: {type(err).__name__} {err.args[0]}")
+        # Optional error message, might be empty if no additional data given to exception
+        err_msg = err.args[0] if len(err.args) > 0 else ""
+
+        logger.critical(f"Fatal: {type(err).__name__}: {err_msg}")
         logger.critical(traceback.format_exc())
 
         exit(1)
