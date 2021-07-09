@@ -9,6 +9,7 @@ import ssl
 import signal
 import os
 import typing
+import traceback
 
 
 # Current working directory, loaded once to use it inside handle_relative_path()
@@ -167,4 +168,6 @@ if __name__ == "__main__":
         asyncio.run(main(sys.argv))  # Runs program in asyncio single thread event's loop
     except Exception as err:  # Print errors with application logging instead of raw stacktrace
         logger.critical(f"Fatal: {type(err).__name__} {err.args[0]}")
+        logger.critical(traceback.format_exc())
+
         exit(1)
