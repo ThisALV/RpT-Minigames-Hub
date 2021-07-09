@@ -59,7 +59,7 @@ jobs:
           -subj "/CN=localhost"
 
       - name: Dry run
-        run: ${{matrix.platform.sudo}} ${{matrix.platform.python}} -m rptminigameshub 35550 localhost.key localhost.pem 2000 --dry-run
+        run: ${{matrix.platform.sudo}} ${{matrix.platform.python}} -m rptminigameshub 35550 localhost.pem localhost.key 2000 --dry-run
   publish: # If pushed on stable branch, then a new release has been done and must be published if all tests passed successfully
     if: endsWith(github.ref, 'stable') # Expects ref to be ref/heads/stable
     needs: build
