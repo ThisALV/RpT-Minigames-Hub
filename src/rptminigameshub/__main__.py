@@ -87,7 +87,11 @@ async def run_server(server: rptminigameshub.network.ClientsListener, updater: r
         wait_for_sigint_task.cancel()
 
     # Stops the server when Ctrl+C is hit
-    asyncio.get_running_loop().add_signal_handler(signal.SIGINT, require_stop)
+    try:
+        asyncio.get_running_loop().add_signal_handler(signal.SIGINT, require_stop)
+    except NotImplementedError:  # Might fail under Windows for example
+        logger.warning("SIGINT handling isn't supported on this platform.")
+
     # Runs server until it is stopped by Ctrl+C OR until status checkout crashes
     serving_task = asyncio.create_task(server.start())
     updater_task = asyncio.create_task(updater.start())  # Must be cancellable if server stops
