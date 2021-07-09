@@ -15,11 +15,11 @@ jobs:
         - name: "ubuntu-18.04"
           python: "python3.7"
           pip: "python3.7 -m pip"
-          sudo: "sudo"
+          sudo: "sudo -H" # -H permissions provides access to the current user directory for pip
         - name: "ubuntu-20.04"
           python: "python3"
           pip: "pip3"
-          sudo: "sudo"
+          sudo: "sudo -H"
           # On Windows, build operation uses tmp virtual envs which don't have a python3.exe file, and as build use the invoked interpreter
           # to select command to run inside these virtual envs, we need to call for just python running at least 3.7 on this hosted runner
         - name: "windows-latest"
@@ -34,11 +34,11 @@ jobs:
 
       - name: Upgrade to Python 3.7 if required # Default python3 for Ubuntu 18.04 is 3.6
         if: matrix.platform.name == 'ubuntu-18.04'
-        run: sudo apt-get install -y python3.7 python3.7-venv
+        run: ${{matrix.platform.sudo}} apt-get install -y python3.7 python3.7-venv
 
       - name: Upgrade pip if required # On Ubuntu 18.04, pip default version is outdated and doesn't support setup.cfg
         if: matrix.platform.name == 'ubuntu-18.04'
-        run: sudo ${{matrix.platform.pip}} install pip
+        run: ${{matrix.platform.sudo}} ${{matrix.platform.pip}} install pip
 
       - name: Install unit testing framework and build command (dev only, not in requirements)
         run: ${{matrix.platform.sudo}} ${{matrix.platform.pip}} install pytest-xdist pytest-mock pytest-asyncio build
