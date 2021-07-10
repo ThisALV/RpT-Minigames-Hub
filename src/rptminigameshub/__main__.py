@@ -57,7 +57,7 @@ def load_servers_data(data_path: os.PathLike):
 def make_security_context(certificate_path: os.PathLike, private_key_path: os.PathLike) -> ssl.SSLContext:
     """Returns a configured TLS features context for a TLS certified server loading cert and privkey at given locations."""
 
-    security_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    security_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     security_ctx.load_cert_chain(certificate_path, private_key_path)
 
     return security_ctx
