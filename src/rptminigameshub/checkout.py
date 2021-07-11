@@ -68,11 +68,12 @@ class StatusUpdater:
         self.security_context = local_security_context
 
         # The next checkout series results that will be published inside subject, has to be accessed from multiple class coroutines
-        self.next_checkout_results = None
+        self._next_checkout_results = None
 
-    async def store_retrieved_status(self, server_port: int):  # Performs a checkout operation for a single server then stores result
+    # Performs a checkout operation for a single server then stores result
+    async def _store_retrieved_status(self, server_port: int):
         try:
-            self.next_checkout_results[server_port] = await self.checkout_server(server_port)
+            self._next_checkout_results[server_port] = await self._checkout_server(server_port)
         except Exception as err:  # An error occurring at a single server checkout must NOT crash the entire hub system
             # Optional error message, might be empty if no additional data given to exception
             err_msg = err.args[0] if len(err.args) > 0 else ""
@@ -80,16 +81,16 @@ class StatusUpdater:
             logger.error(f"Server {server_port}: {type(err).__name__}: {err_msg}")
 
             # ...and we signal status hasn't be retrieving successfully with a None value
-            self.next_checkout_results[server_port] = None
+            self._next_checkout_results[server_port] = None
 
     # Performs one StatusUpdater lifecycle by doing checkout on each server and sleeping until the next cycle then returns
-    async def do_updater_cycle(self):
+    async def _do_updater_cycle(self):
         operation_begin_ms = time.time_ns() * 10 ** -6  # Keeps track of when the operation began to mesure its duration
-        self.next_checkout_results = {}  # Resets the results dictionary of the previous operation results
+        self._next_checkout_results = {}  # Resets the results dictionary of the previous operation results
 
         checkout_tasks = []
         for port in self.servers_list:  # Run checkout operation concurrently because we're doing the same task on 6 different connections
-            checkout_tasks.append(asyncio.create_task(self.store_retrieved_status(port)))
+            checkout_tasks.append(asyncio.create_task(self._store_retrieved_status(port)))
 
         try:  # Avoids a situation where a new checkout series begin before the previous one is currently running with wait_for
             await asyncio.wait_for(asyncio.gather(checkout_tasks), self.interval_ms)
@@ -103,14 +104,7 @@ class StatusUpdater:
         # Waits the remaining time of the interval, aka the total interval time - time passed to perform the current checkout series
         await asyncio.sleep(self.interval_ms - operation_duration_ms)
 
-    async def start(self):
-        """Starts periodic updates with instance configuration. Dictionary containing results for every server status is published inside
-        selected Subject when ALL checkouts are done."""
-
-        while True:  # Repeats that asynchronous task indefinitely, will be exited when running task will be stopped by Ctrl+C
-            await self.do_updater_cycle()
-
-    async def checkout_server(self, server_port: int) -> "tuple[int, int]":
+    async def _checkout_server(self, server_port: int) -> "tuple[int, int]":
         """Asynchronously connect to a locally hosted game server and sends CHECKOUT command, then await for response and returns a tuple containing:
         1st the current number of players connected, 2nd the maximal number of players accepted."""
 
@@ -120,3 +114,10 @@ class StatusUpdater:
             server_response = await connection.recv()  # When request sent, wait for the serve response to be received
 
             return parse_availability_response(server_response)  # Tries to parse its response and retrieves the result tuple
+
+    async def start(self):
+        """Starts periodic updates with instance configuration. Dictionary containing results for every server status is published inside
+        selected Subject when ALL checkouts are done."""
+
+        while True:  # Repeats that asynchronous task indefinitely, will be exited when running task will be stopped by Ctrl+C
+            await self._do_updater_cycle()

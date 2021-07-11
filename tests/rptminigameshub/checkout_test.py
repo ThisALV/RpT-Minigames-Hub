@@ -64,11 +64,11 @@ class TestStatusUpdater:
         # Mocks connection method returning the previously mocked connection instance
         mocked_websockets_connect = mocker.patch("websockets.connect", return_value=mocked_websockets_client_protocol)
 
-        # Now creates a class instance providing only the fields necessary for checkout_server() method
+        # Now creates a class instance providing only the fields necessary for _checkout_server() method
         updater = StatusUpdater(0, [], mocked_status_subject, mocked_security_context)
 
         # Performs checkout operation for local port 37373
-        checkout_result = await updater.checkout_server(37373)
+        checkout_result = await updater._checkout_server(37373)
 
         # Checks for connection to have been established on secure local port 37373 with the instance SSL context
         # This function is not awaited directly by us so we cannot use assert_awaited* testing functions
@@ -80,38 +80,38 @@ class TestStatusUpdater:
 
     @pytest.mark.asyncio
     async def test_store_retrieved_status_successfully(self, mocker, mocked_status_subject, mocked_security_context):
-        # Immediately retrieves a server status with 0/2 players connected, must be awaitable like checkout_server() method
-        async def mocked_successfully_checkout_server(_: int):  # Must take an argument like checkout_server() method
+        # Immediately retrieves a server status with 0/2 players connected, must be awaitable like _checkout_server() method
+        async def mocked_successfully_checkout_server(_: int):  # Must take an argument like _checkout_server() method
             return 0, 2
 
-        # Interval ms and ports list are not required for store_retrieved_status() usage
+        # Interval ms and ports list are not required for _store_retrieved_status() usage
         updater = StatusUpdater(0, [], mocked_status_subject, mocked_security_context)
-        # checkout_server() is tested somewhere else, here we assume it executes without any error by mocking it
-        mocked_checkout_server = mocker.patch.object(updater, "checkout_server", wraps=mocked_successfully_checkout_server)
-        # start() method calling store_retrieved_status() initializes empty dict before storing result, it is required for method to work
-        updater.next_checkout_results = {}
+        # _checkout_server() is tested somewhere else, here we assume it executes without any error by mocking it
+        mocked_checkout_server = mocker.patch.object(updater, "_checkout_server", wraps=mocked_successfully_checkout_server)
+        # start() method calling _store_retrieved_status() initializes empty dict before storing result, it is required for method to work
+        updater._next_checkout_results = {}
 
         # Performs a mocked checkout and stores the result inside the instance member
-        await updater.store_retrieved_status(37373)  # Checkout on game server local port 37373
+        await updater._store_retrieved_status(37373)  # Checkout on game server local port 37373
 
         mocked_checkout_server.assert_awaited_once_with(37373)  # Checks for checkout to have been performed on game server at port 37373
-        assert updater.next_checkout_results == {37373: (0, 2)}  # A result for this local game server should have been retrieved
+        assert updater._next_checkout_results == {37373: (0, 2)}  # A result for this local game server should have been retrieved
 
     @pytest.mark.asyncio
     async def test_store_retrieved_status_failed(self, mocker, mocked_status_subject, mocked_security_context):
-        # Immediately raises an error, must be awaitable like checkout_server() method
-        async def mocked_successfully_checkout_server(_: int):  # Must take an argument like checkout_server() method
+        # Immediately raises an error, must be awaitable like _checkout_server() method
+        async def mocked_successfully_checkout_server(_: int):  # Must take an argument like _checkout_server() method
             raise Exception("A random error")
 
-        # Interval ms and ports list are not required for store_retrieved_status() usage
+        # Interval ms and ports list are not required for _store_retrieved_status() usage
         updater = StatusUpdater(0, [], mocked_status_subject, mocked_security_context)
-        # checkout_server() is tested somewhere else, here we assume it executes without any error by mocking it
-        mocked_checkout_server = mocker.patch.object(updater, "checkout_server", wraps=mocked_successfully_checkout_server)
-        # start() method calling store_retrieved_status() initializes empty dict before storing result, it is required for method to work
-        updater.next_checkout_results = {}
+        # _checkout_server() is tested somewhere else, here we assume it executes without any error by mocking it
+        mocked_checkout_server = mocker.patch.object(updater, "_checkout_server", wraps=mocked_successfully_checkout_server)
+        # start() method calling _store_retrieved_status() initializes empty dict before storing result, it is required for method to work
+        updater._next_checkout_results = {}
 
         # Performs a mocked checkout and stores the result inside the instance member
-        await updater.store_retrieved_status(37373)  # Checkout on game server local port 37373
+        await updater._store_retrieved_status(37373)  # Checkout on game server local port 37373
 
         mocked_checkout_server.assert_awaited_once_with(37373)  # Checks for checkout to have been performed on game server at port 37373
-        assert updater.next_checkout_results == {37373: None}  # None result means checkout couldn't have been performed on that server
+        assert updater._next_checkout_results == {37373: None}  # None result means checkout couldn't have been performed on that server
