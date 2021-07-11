@@ -1,5 +1,6 @@
 from rptminigameshub.checkout import *
 import pytest
+import unittest.mock
 
 
 class TestServerResponseParsing:
@@ -28,3 +29,89 @@ class TestServerResponseParsing:
     def test_everything_fine(self):
         assert parse_availability_response("AVAILABILITY 0 2") == (0, 2)
         assert parse_availability_response("AVAILABILITY 2 3") == (2, 3)
+
+
+class TestStatusUpdater:
+    """Unit tests for StatusUpdater class methods."""
+
+    @pytest.fixture
+    def mocked_security_context(self, mocker):
+        """Provides a mocked `ssl.SSLContext` object to use with `StatusUpdater` ctor."""
+
+        return mocker.patch("ssl.SSLContext")
+
+    @pytest.fixture
+    def mocked_status_subject(self, mocker):
+        """Provides a mocked `Subject` object to use with `StatusUpdater` ctor."""
+
+        return mocker.patch("rptminigameshub.checkout.Subject")
+
+    @pytest.mark.asyncio
+    async def test_checkout_server(self, mocker, event_loop, mocked_security_context, mocked_status_subject):
+        # Creates a spyable connection instance to mock connction with localhost and check if Python script is behaving as expected
+        mocked_websockets_client_protocol = mocker.patch("websockets.WebSocketClientProtocol")
+        # Inside a context manager, a WebSocketClientProtocol should be using itself by return self with __aenter__ method
+        mocker.patch.object(mocked_websockets_client_protocol, "__aenter__", return_value=mocked_websockets_client_protocol)
+        # send() method should be awaitable, this will make it an AsyncMock
+        mocker.patch.object(mocked_websockets_client_protocol, "send", unittest.mock.AsyncMock())
+
+        async def mocked_server_response():  # Immediately retrieves a status of 1/2 players connected, but must be awaitable like recv()
+            return "AVAILABILITY 1 2"
+
+        # Mocks server response for its status to be 1/2 players connected, it must be passed by a coroutine because the client is
+        # awaiting for it
+        mocker.patch.object(mocked_websockets_client_protocol, "recv", mocked_server_response)
+        # Mocks connection method returning the previously mocked connection instance
+        mocked_websockets_connect = mocker.patch("websockets.connect", return_value=mocked_websockets_client_protocol)
+
+        # Now creates a class instance providing only the fields necessary for checkout_server() method
+        updater = StatusUpdater(0, [], mocked_status_subject, mocked_security_context)
+
+        # Performs checkout operation for local port 37373
+        checkout_result = await updater.checkout_server(37373)
+
+        # Checks for connection to have been established on secure local port 37373 with the instance SSL context
+        # This function is not awaited directly by us so we cannot use assert_awaited* testing functions
+        mocked_websockets_connect.assert_called_once_with("wss://localhost:37373", ssl=mocked_security_context)
+        # Checks for client to have requested a checkout
+        mocked_websockets_client_protocol.send.assert_awaited_once_with("CHECKOUT")
+
+        assert checkout_result == (1, 2)  # Asserts the retrieved server status is 1/2 players, as the server response should have said
+
+    @pytest.mark.asyncio
+    async def test_store_retrieved_status_successfully(self, mocker, mocked_status_subject, mocked_security_context):
+        # Immediately retrieves a server status with 0/2 players connected, must be awaitable like checkout_server() method
+        async def mocked_successfully_checkout_server(_: int):  # Must take an argument like checkout_server() method
+            return 0, 2
+
+        # Interval ms and ports list are not required for store_retrieved_status() usage
+        updater = StatusUpdater(0, [], mocked_status_subject, mocked_security_context)
+        # checkout_server() is tested somewhere else, here we assume it executes without any error by mocking it
+        mocked_checkout_server = mocker.patch.object(updater, "checkout_server", wraps=mocked_successfully_checkout_server)
+        # start() method calling store_retrieved_status() initializes empty dict before storing result, it is required for method to work
+        updater.next_checkout_results = {}
+
+        # Performs a mocked checkout and stores the result inside the instance member
+        await updater.store_retrieved_status(37373)  # Checkout on game server local port 37373
+
+        mocked_checkout_server.assert_awaited_once_with(37373)  # Checks for checkout to have been performed on game server at port 37373
+        assert updater.next_checkout_results == {37373: (0, 2)}  # A result for this local game server should have been retrieved
+
+    @pytest.mark.asyncio
+    async def test_store_retrieved_status_failed(self, mocker, mocked_status_subject, mocked_security_context):
+        # Immediately raises an error, must be awaitable like checkout_server() method
+        async def mocked_successfully_checkout_server(_: int):  # Must take an argument like checkout_server() method
+            raise Exception("A random error")
+
+        # Interval ms and ports list are not required for store_retrieved_status() usage
+        updater = StatusUpdater(0, [], mocked_status_subject, mocked_security_context)
+        # checkout_server() is tested somewhere else, here we assume it executes without any error by mocking it
+        mocked_checkout_server = mocker.patch.object(updater, "checkout_server", wraps=mocked_successfully_checkout_server)
+        # start() method calling store_retrieved_status() initializes empty dict before storing result, it is required for method to work
+        updater.next_checkout_results = {}
+
+        # Performs a mocked checkout and stores the result inside the instance member
+        await updater.store_retrieved_status(37373)  # Checkout on game server local port 37373
+
+        mocked_checkout_server.assert_awaited_once_with(37373)  # Checks for checkout to have been performed on game server at port 37373
+        assert updater.next_checkout_results == {37373: None}  # None result means checkout couldn't have been performed on that server
