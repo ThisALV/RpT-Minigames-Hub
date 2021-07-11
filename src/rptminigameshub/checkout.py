@@ -82,29 +82,33 @@ class StatusUpdater:
             # ...and we signal status hasn't be retrieving successfully with a None value
             self.next_checkout_results[server_port] = None
 
+    # Performs one StatusUpdater lifecycle by doing checkout on each server and sleeping until the next cycle then returns
+    async def do_updater_cycle(self):
+        operation_begin_ms = time.time_ns() * 10 ** -6  # Keeps track of when the operation began to mesure its duration
+        self.next_checkout_results = {}  # Resets the results dictionary of the previous operation results
+
+        checkout_tasks = []
+        for port in self.servers_list:  # Run checkout operation concurrently because we're doing the same task on 6 different connections
+            checkout_tasks.append(asyncio.create_task(self.store_retrieved_status(port)))
+
+        try:  # Avoids a situation where a new checkout series begin before the previous one is currently running with wait_for
+            await asyncio.wait_for(asyncio.gather(checkout_tasks), self.interval_ms)
+        except asyncio.TimeoutError:
+            logger.error("Some game server checkouts didn't complete before delay end, they're cancelled.")
+
+        # Calculates the final duration of this checkout series operation
+        operation_end_ms = time.time_ns() * 10 ** -6  # Conversion from ns to ms -> 10^-6 units
+        operation_duration_ms = operation_end_ms - operation_begin_ms
+
+        # Waits the remaining time of the interval, aka the total interval time - time passed to perform the current checkout series
+        await asyncio.sleep(self.interval_ms - operation_duration_ms)
+
     async def start(self):
         """Starts periodic updates with instance configuration. Dictionary containing results for every server status is published inside
         selected Subject when ALL checkouts are done."""
 
         while True:  # Repeats that asynchronous task indefinitely, will be exited when running task will be stopped by Ctrl+C
-            operation_begin_ms = time.time_ns() * 10 ** -6  # Keeps track of when the operation began to mesure its duration
-            self.next_checkout_results = {}  # Resets the results dictionary of the previous operation results
-
-            checkout_tasks = []
-            for port in self.servers_list:  # Run checkout operation concurrently because we're doing the same task on 6 different connections
-                checkout_tasks.append(asyncio.create_task(self.store_retrieved_status(port)))
-
-            try:  # Avoids a situation where a new checkout series begin before the previous one is currently running with wait_for
-                await asyncio.wait_for(asyncio.gather(checkout_tasks), self.interval_ms)
-            except asyncio.TimeoutError:
-                logger.error("Some game server checkouts didn't complete before delay end, they're cancelled.")
-
-            # Calculates the final duration of this checkout series operation
-            operation_end_ms = time.time_ns() * 10 ** -6  # Conversion from ns to ms -> 10^-6 units
-            operation_duration_ms = operation_end_ms - operation_begin_ms
-
-            # Waits the remaining time of the interval, aka the total interval time - time passed to perform the current checkout series
-            await asyncio.sleep(self.interval_ms - operation_duration_ms)
+            await self.do_updater_cycle()
 
     async def checkout_server(self, server_port: int) -> "tuple[int, int]":
         """Asynchronously connect to a locally hosted game server and sends CHECKOUT command, then await for response and returns a tuple containing:
