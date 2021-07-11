@@ -16,7 +16,7 @@ class BadResponseSyntax(RuntimeError):
         """Constructs a `RuntimeError` with a formatted error message containing violated syntax rule and command which
         led to that error."""
 
-        super(f"Rule: {reason}, Actual command: {actual_command}")
+        super().__init__(f"Rule: {reason}, Actual command: {actual_command}")
 
 
 def parse_availability_response(availability_response: str) -> "tuple[int, int]":
