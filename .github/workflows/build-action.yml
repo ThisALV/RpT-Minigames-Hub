@@ -15,17 +15,14 @@ jobs:
         - name: "ubuntu-18.04"
           python: "python3.8"
           pip: "python3.8 -m pip"
-          sudo: "sudo -H" # -H permissions provides access to the current user directory for pip
         - name: "ubuntu-20.04"
           python: "python"
           pip: "pip"
-          sudo: "sudo -H"
           # On Windows, build operation uses tmp virtual envs which don't have a python3.exe file, and as build use the invoked interpreter
           # to select command to run inside these virtual envs, we need to call for just python running at least 3.7 on this hosted runner
         - name: "windows-latest"
           python: "python"
           pip: "pip"
-          sudo: ""  # On Windows, sudo isn't available, so we just don't call it as everything will run as User mode
     runs-on: ${{matrix.platform.name}}
     name: ${{matrix.platform.name}} build
     steps:
@@ -39,31 +36,31 @@ jobs:
 
       - name: Upgrade pip if required # On Ubuntu 18.04, pip default version is outdated and doesn't support setup.cfg
         if: matrix.platform.name == 'ubuntu-18.04'
-        run: ${{matrix.platform.sudo}} ${{matrix.platform.pip}} install --upgrade pip
+        run: ${{matrix.platform.pip}} install --upgrade pip
 
       - name: Install unit testing framework and build command (dev only, not in requirements)
-        run: ${{matrix.platform.sudo}} ${{matrix.platform.pip}} install pytest-xdist pytest-mock pytest-asyncio build
+        run: ${{matrix.platform.pip}} install pytest-xdist pytest-mock pytest-asyncio build
 
       - name: Install deps
-        run: ${{matrix.platform.sudo}} ${{matrix.platform.pip}} install websockets
+        run: ${{matrix.platform.pip}} install websockets
 
       - name: Generate distribution packages
         run: ${{matrix.platform.python}} -m build
 
       - name: Install local package
-        run: ${{matrix.platform.sudo}} ${{matrix.platform.pip}} install .
+        run: ${{matrix.platform.pip}} install .
 
       - name: Run tests
         run: pytest -n auto tests
 
       - name: Create TLS certificate and private key
         run: >
-          ${{matrix.platform.sudo}} openssl req -batch -x509 -newkey rsa:2048
+          openssl req -batch -x509 -newkey rsa:2048
           -keyout localhost.key -out localhost.pem -nodes -days 1
           -subj "/CN=localhost"
 
       - name: Dry run
-        run: ${{matrix.platform.sudo}} ${{matrix.platform.python}} -m rptminigameshub 35550 localhost.pem localhost.key 2000 --dry-run
+        run: ${{matrix.platform.python}} -m rptminigameshub 35550 localhost.pem localhost.key 2000 --dry-run
   publish: # If pushed on stable branch, then a new release has been done and must be published if all tests passed successfully
     if: endsWith(github.ref, 'stable') # Expects ref to be ref/heads/stable
     needs: build
