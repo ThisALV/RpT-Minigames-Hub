@@ -43,6 +43,9 @@ jobs:
       - name: Install unit testing framework and build command (dev only, not in requirements)
         run: ${{matrix.platform.sudo}} ${{matrix.platform.pip}} install pytest-xdist pytest-mock pytest-asyncio build
 
+      - name: Install deps
+        run: ${{matrix.platform.sudo}} ${{matrix.platform.pip}} install websockets
+
       - name: Generate distribution packages
         run: ${{matrix.platform.python}} -m build
 
