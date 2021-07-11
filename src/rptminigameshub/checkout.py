@@ -25,7 +25,7 @@ def parse_availability_response(availability_response: str) -> "tuple[int, int]"
     # Split by words check if response syntax is correct
     words = availability_response.split(" ")
 
-    if len(words) < 3:  # If there isn't one word for command and two args, then command words cannot be parsed as expected
+    if len(words) != 3:  # If there isn't one word for command and two args, then command words cannot be parsed as expected
         raise BadResponseSyntax("Syntax is AVAILABILITY <players_number> <maximum>", availability_response)
 
     try:  # We might fail to parse arguments if players count data are not integers, in that case it is a syntax error
