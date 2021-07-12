@@ -3,6 +3,7 @@ import logging
 import ssl
 import websockets
 import time
+import traceback
 
 
 # Initializes and retrieves this module logger
@@ -78,7 +79,8 @@ class StatusUpdater:
             # Optional error message, might be empty if no additional data given to exception
             err_msg = err.args[0] if len(err.args) > 0 else ""
             # Instead, we log the current error...
-            logger.error(f"Server {server_port}: {type(err).__name__}: {err_msg}")
+            logger.error(f"Server :{server_port}: {type(err).__name__}: {err_msg}")
+            logger.error(traceback.format_exc())
 
             # ...and we signal status hasn't be retrieving successfully with a None value
             self._next_checkout_results[server_port] = None

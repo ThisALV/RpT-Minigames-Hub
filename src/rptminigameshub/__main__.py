@@ -68,7 +68,8 @@ def make_client_security_context(certificate_path: os.PathLike) -> ssl.SSLContex
     it is running locally."""
 
     # Must connect with a server, as this server is local, we must refers to its locally stored certificate
-    security_ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, capath=str(certificate_path))
+    security_ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    security_ctx.load_verify_locations(cafile=certificate_path)  # This method allows us to give a PathLike object
     # The hostname will be localhost despite the fact that locally stored cert will be signed for a remote hostname
     security_ctx.check_hostname = False
 
