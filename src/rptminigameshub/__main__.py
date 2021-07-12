@@ -21,7 +21,7 @@ SERVERS_LIST_RELATIVE_PATH = "data/servers.json"
 # of stderr
 logging.basicConfig(
     level=logging.DEBUG,
-    format="[%(asctime)s/%(levelname)s] %(module)s : %(message)s",
+    format="[%(asctime)s/%(levelname)s] %(name)s : %(message)s",
     stream=sys.stdout
 )
 # Initializes and retrieves this module logger
