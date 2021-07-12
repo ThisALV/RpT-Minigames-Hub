@@ -93,7 +93,7 @@ class StatusUpdater:
             checkout_tasks.append(asyncio.create_task(self._store_retrieved_status(port)))
 
         try:  # Avoids a situation where a new checkout series begin before the previous one is currently running with wait_for
-            await asyncio.wait_for(asyncio.gather(checkout_tasks), self.interval_ms)
+            await asyncio.wait_for(asyncio.gather(*checkout_tasks), self.interval_ms)
         except asyncio.TimeoutError:
             logger.error("Some game server checkouts didn't complete before delay end, they're cancelled.")
 
