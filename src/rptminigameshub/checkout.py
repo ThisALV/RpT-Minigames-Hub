@@ -85,7 +85,7 @@ class StatusUpdater:
 
     # Performs one StatusUpdater lifecycle by doing checkout on each server and sleeping until the next cycle then returns
     async def _do_updater_cycle(self):
-        operation_begin_ms = time.time_ns() * 10 ** -6  # Keeps track of when the operation began to mesure its duration
+        operation_begin_s = time.time()  # Keeps track of when the operation began to mesure its duration
         self._next_checkout_results = {}  # Resets the results dictionary of the previous operation results
 
         logger.debug("Begin a new updater cycle.")
@@ -107,13 +107,13 @@ class StatusUpdater:
                     self._next_checkout_results[port] = None
 
         # Calculates the final duration of this checkout series operation
-        operation_end_ms = time.time_ns() * 10 ** -6  # Conversion from ns to ms -> 10^-6 units
-        operation_duration_ms = operation_end_ms - operation_begin_ms
+        operation_end_s = time.time()
+        operation_duration_s = operation_end_s - operation_begin_s
 
         # Waits the remaining time of the interval, aka the total interval time - time passed to perform the current checkout series
-        remaining_time_ms = self.interval_ms - operation_duration_ms
-        logger.debug(f"Waiting {remaining_time_ms} ms before the next updater cycle...")
-        await asyncio.sleep(remaining_time_ms)
+        remaining_time_s = (self.interval_ms * 10 ** -3) - operation_duration_s
+        logger.debug(f"Waiting {remaining_time_s} ms before the next updater cycle...")
+        await asyncio.sleep(remaining_time_s)  # Converts
 
     async def _checkout_server(self, server_port: int) -> "tuple[int, int]":
         """Asynchronously connect to a locally hosted game server and sends CHECKOUT command, then await for response and returns a tuple containing:

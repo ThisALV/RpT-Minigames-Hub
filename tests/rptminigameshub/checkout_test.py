@@ -120,7 +120,7 @@ class TestStatusUpdater:
 
     @pytest.mark.asyncio
     async def test_do_updater_cycle(self, mocker, mocked_status_subject, mocked_security_context):
-        current_time_ns = 0  # Used to control the currently mocked time in nanoseconds
+        current_time_s = 0  # Used to control the currently mocked time in nanoseconds
         server_ports_list = [35555, 35556, 35557, 35558, 35559, 35560]  # List of game server to checkout for
         mocked_checkout_results = {  # Associates a game server port with the result of a checkout operation on that specific game server
             35555: (0, 2),
@@ -133,8 +133,8 @@ class TestStatusUpdater:
 
         checkout_delay = asyncio.Event()  # Will be set to indicates checkout operations on game server have completed successfully
 
-        def mocked_time_ns() -> int:  # Will returns current_time_ns, mocked to decide which time a series of checkout operations is taking
-            return current_time_ns
+        def mocked_time() -> int:  # Will returns current_time_s, mocked to decide which time a series of checkout operations is taking
+            return current_time_s
 
         # Copies mocked result inside instance stored result, sometimes checkout times out to verify these errors are handled properly
         async def mocked_store_retrieved_status(port: int):
@@ -143,7 +143,7 @@ class TestStatusUpdater:
                 # None to the corresponding server status entry
                 raise asyncio.TimeoutError()
 
-            # By waiting this event, we allow the unit test to change current_time_ns before measuring checkout operation duration
+            # By waiting this event, we allow the unit test to change current_time_s before measuring checkout operation duration
             await checkout_delay.wait()
             updater._next_checkout_results[port] = mocked_checkout_results[port]
 
@@ -151,7 +151,7 @@ class TestStatusUpdater:
         # checkout results are published as expected
         updater = StatusUpdater(5000, server_ports_list, mocked_status_subject, mocked_security_context)
 
-        mocker.patch("time.time_ns", mocked_time_ns)  # Provides a time piloted by this unit test
+        mocker.patch("time.time", mocked_time)  # Provides a time piloted by this unit test
         mocker.patch.object(updater, "_store_retrieved_status", mocked_store_retrieved_status)  # Provides checkout results piloted by test
         mocked_sleep = mocker.patch("asyncio.sleep")  # Spies duration with which this function is called
         mocker.patch("rptminigameshub.checkout.logger.error")  # Spies if error of timed out checkout was logged as expected
@@ -159,12 +159,12 @@ class TestStatusUpdater:
         async def fast_forward_time_then_continue():
             await asyncio.sleep(0)  # Ensures checkout series has begun before we modifies the time
 
-            nonlocal current_time_ns
-            current_time_ns = 2500 * 10 ** 6  # We end cycle at time 2500 ms, it took 1500 ms
+            nonlocal current_time_s
+            current_time_s = 2.5  # We end cycle at time 2500 ms, it took 1500 ms
 
             checkout_delay.set()
 
-        current_time_ns = 1000 * 10 ** 6  # We begin checkout series (updater cycle) at time 1000 ms
+        current_time_s = 1  # We begin checkout series (updater cycle) at time 1000 ms
         await asyncio.gather(  # Starts updater cycle, then fast forward time during 1500 mocked ms
             asyncio.create_task(updater._do_updater_cycle()),
             asyncio.create_task(fast_forward_time_then_continue())
@@ -175,7 +175,7 @@ class TestStatusUpdater:
 
         # As initial interval duration between 2 cycles is 5000 ms and this cycle ran for 1500 ms, it should sleep 3500 ms until the next
         # cycle can run
-        mocked_sleep.assert_called_with(3500)
+        mocked_sleep.assert_called_with(3.5)  # sleep() takes a duration in seconds
 
         # This final checkout results dict should correspond to the status retrieved by checkout operations, here it is the same as the
         # mocked results dict
