@@ -10,56 +10,57 @@ jobs:
       fail-fast: false
       matrix:
         platform: # Python executables might differ depending on running platform
-          # On Ubuntu 18.04, default python3 is 3.6 < 3.7, so we'll need to call python modules through python3.7 so the correct version
+          # On Ubuntu 18.04, default python3 is 3.6 < 3.8, so we'll need to call python modules through python3.8 so the correct version
           # will be executed
         - name: "ubuntu-18.04"
-          python: "python3.7"
-          pip: "python3.7 -m pip"
-          sudo: "sudo -H" # -H permissions provides access to the current user directory for pip
+          python: "python3.8"
+          pip: "python3.8 -m pip"
         - name: "ubuntu-20.04"
-          python: "python3"
-          pip: "pip3"
-          sudo: "sudo -H"
+          python: "python"
+          pip: "pip"
           # On Windows, build operation uses tmp virtual envs which don't have a python3.exe file, and as build use the invoked interpreter
           # to select command to run inside these virtual envs, we need to call for just python running at least 3.7 on this hosted runner
         - name: "windows-latest"
           python: "python"
           pip: "pip"
-          sudo: ""  # On Windows, sudo isn't available, so we just don't call it as everything will run as User mode
     runs-on: ${{matrix.platform.name}}
     name: ${{matrix.platform.name}} build
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Upgrade to Python 3.7 if required # Default python3 for Ubuntu 18.04 is 3.6
-        if: matrix.platform.name == 'ubuntu-18.04'
-        run: ${{matrix.platform.sudo}} apt-get install -y python3.7 python3.7-venv
+      - name: Upgrade to Python 3.8 if required
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
 
       - name: Upgrade pip if required # On Ubuntu 18.04, pip default version is outdated and doesn't support setup.cfg
         if: matrix.platform.name == 'ubuntu-18.04'
-        run: ${{matrix.platform.sudo}} ${{matrix.platform.pip}} install --upgrade pip
+        run: ${{matrix.platform.pip}} install --upgrade pip
 
       - name: Install unit testing framework and build command (dev only, not in requirements)
-        run: ${{matrix.platform.sudo}} ${{matrix.platform.pip}} install pytest-xdist pytest-mock pytest-asyncio build
+        run: ${{matrix.platform.pip}} install pytest-xdist pytest-mock pytest-asyncio build
+
+      - name: Install deps
+        run: ${{matrix.platform.pip}} install websockets
 
       - name: Generate distribution packages
         run: ${{matrix.platform.python}} -m build
 
       - name: Install local package
-        run: ${{matrix.platform.sudo}} ${{matrix.platform.pip}} install .
+        run: ${{matrix.platform.pip}} install .
 
       - name: Run tests
         run: pytest -n auto tests
 
       - name: Create TLS certificate and private key
         run: >
-          ${{matrix.platform.sudo}} openssl req -batch -x509 -newkey rsa:2048
+          openssl req -batch -x509 -newkey rsa:2048
           -keyout localhost.key -out localhost.pem -nodes -days 1
           -subj "/CN=localhost"
 
       - name: Dry run
-        run: ${{matrix.platform.sudo}} ${{matrix.platform.python}} -m rptminigameshub 35550 localhost.pem localhost.key 2000 --dry-run
+        run: ${{matrix.platform.python}} -m rptminigameshub 35550 localhost.pem localhost.key 2000 --dry-run
   publish: # If pushed on stable branch, then a new release has been done and must be published if all tests passed successfully
     if: endsWith(github.ref, 'stable') # Expects ref to be ref/heads/stable
     needs: build
@@ -77,3 +78,4 @@ jobs:
         with:
           user: __token__
           password: ${{secrets.PYPI_API_TOKEN}}
+

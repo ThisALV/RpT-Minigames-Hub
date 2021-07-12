@@ -54,11 +54,24 @@ def load_servers_data(data_path: os.PathLike):
         return json.load(file)["servers"]  # Retrieves "servers" field, return will make file to be closed as we're inside a with-context
 
 
-def make_security_context(certificate_path: os.PathLike, private_key_path: os.PathLike) -> ssl.SSLContext:
+def make_server_security_context(certificate_path: os.PathLike, private_key_path: os.PathLike) -> ssl.SSLContext:
     """Returns a configured TLS features context for a TLS certified server loading cert and privkey at given locations."""
 
     security_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     security_ctx.load_cert_chain(certificate_path, private_key_path)
+
+    return security_ctx
+
+
+def make_client_security_context(certificate_path: os.PathLike) -> ssl.SSLContext:
+    """Returns a configured TLS features context to connect with a locally hosted game server which doesn't need to authenticate itself as
+    it is running locally."""
+
+    # Must connect with a server, as this server is local, we must refers to its locally stored certificate
+    security_ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    security_ctx.load_verify_locations(cafile=certificate_path)  # This method allows us to give a PathLike object
+    # The hostname will be localhost despite the fact that locally stored cert will be signed for a remote hostname
+    security_ctx.check_hostname = False
 
     return security_ctx
 
@@ -151,16 +164,25 @@ async def main(argv: "list[str]"):
     # Shared between ClientsListener and StatusUpdater to communicates about latest retrieved status
     current_servers_status = rptminigameshub.checkout.Subject()
 
+    # This path will be used for both checkouts client and hub server security contexts
+    relative_abs_certificate_path = handle_relative_path(certificate_path)
+
     # Configures SSL features for a TLS-based server with parsed options
-    logger.debug(f"Configuring context for TLS crt at {certificate_path} and for private key at {privkey_path}...")
+    logger.debug(f"Configuring hub server context for TLS crt at {certificate_path} and for private key at {privkey_path}...")
     # TLS configuration files are looked up relatively to the current working directory
-    security_ctx = make_security_context(handle_relative_path(certificate_path), handle_relative_path(privkey_path))
-    logger.debug("Security context configured.")
+    server_security_ctx = make_server_security_context(relative_abs_certificate_path, handle_relative_path(privkey_path))
+    logger.debug("Hub server security context configured.")
+
+    # Configures SSL features for a TLS-based client which will communicates with a locally hosted game server
+    logger.debug(f"Configuring checkout client context for TLS crt at {certificate_path}...")
+    # Using config file lookep up from current working directory again
+    client_security_ctx = make_client_security_context(relative_abs_certificate_path)
+    logger.debug("Checkouts client security context configured.")
 
     # Configures periodic checkout with created ports list to start it later
-    updater = rptminigameshub.checkout.StatusUpdater(checkouts_interval, local_ports(servers), current_servers_status)
+    updater = rptminigameshub.checkout.StatusUpdater(checkouts_interval, local_ports(servers), current_servers_status, client_security_ctx)
     # Configures server with listening port and configured TLS features
-    server = rptminigameshub.network.ClientsListener(port, security_ctx, current_servers_status)
+    server = rptminigameshub.network.ClientsListener(port, server_security_ctx, current_servers_status)
 
     logger.info("Start hub server.")
     await run_server(server, updater, dry_run)
