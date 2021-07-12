@@ -1,9 +1,8 @@
-import asyncio
-
 from rptminigameshub.checkout import *
 import rptminigameshub.checkout
 import pytest
 import unittest.mock
+import asyncio
 
 
 class TestServerResponseParsing:
@@ -158,10 +157,12 @@ class TestStatusUpdater:
         current_checkout_results = None
 
         async def store_updater_cycle_result():  # Saves method returned value because it is started inside a asyncio.gather() call
+            nonlocal current_checkout_results
             current_checkout_results = await updater._do_updater_cycle()
 
         async def fast_forward_time_then_continue():
             await asyncio.sleep(0)  # Ensures checkout series has begun before we modifies the time
+            nonlocal current_time_ns
             current_time_ns = 2500 * 10 ** 6  # We end cycle at time 2500 ms, it took 1500 ms
 
         current_time_ns = 1000 * 10 ** 6  # We begin checkout series (updater cycle) at time 1000 ms
