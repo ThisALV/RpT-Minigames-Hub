@@ -139,7 +139,9 @@ class TestStatusUpdater:
         # Copies mocked result inside instance stored result, sometimes checkout times out to verify these errors are handled properly
         async def mocked_store_retrieved_status(port: int):
             if port == 35557 or port == 35560:  # For these 2 ports, emulates a game server which is not responding
-                raise asyncio.TimeoutError()  # This will cause checkout operation to not complete in time
+                # This will cause checkout operation to not complete in time, when timed out, a task is cancelled so we're not assigning
+                # None to the corresponding server status entry
+                raise asyncio.TimeoutError()
 
             # By waiting this event, we allow the unit test to change current_time_ns before measuring checkout operation duration
             await checkout_delay.wait()
@@ -156,8 +158,11 @@ class TestStatusUpdater:
 
         async def fast_forward_time_then_continue():
             await asyncio.sleep(0)  # Ensures checkout series has begun before we modifies the time
+
             nonlocal current_time_ns
             current_time_ns = 2500 * 10 ** 6  # We end cycle at time 2500 ms, it took 1500 ms
+
+            checkout_delay.set()
 
         current_time_ns = 1000 * 10 ** 6  # We begin checkout series (updater cycle) at time 1000 ms
         await asyncio.gather(  # Starts updater cycle, then fast forward time during 1500 mocked ms

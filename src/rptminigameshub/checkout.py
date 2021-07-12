@@ -97,6 +97,13 @@ class StatusUpdater:
         except asyncio.TimeoutError:
             logger.error("Some game server checkouts didn't complete before delay end, they're cancelled.")
 
+            # If this happens, then some of the _store_retrieved_status tasks will have been cancelled and will not have assigned None to
+            # their corresponding game server entry
+            for port in self.servers_list:
+                # Each game server which task has been cancelled is considered as a non-retrieved status / injoignable server
+                if port not in self._next_checkout_results:
+                    self._next_checkout_results[port] = None
+
         # Calculates the final duration of this checkout series operation
         operation_end_ms = time.time_ns() * 10 ** -6  # Conversion from ns to ms -> 10^-6 units
         operation_duration_ms = operation_end_ms - operation_begin_ms
