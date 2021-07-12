@@ -154,12 +154,6 @@ class TestStatusUpdater:
         mocked_sleep = mocker.patch("asyncio.sleep")  # Spies duration with which this function is called
         mocker.patch("rptminigameshub.checkout.logger.error")  # Spies if error of timed out checkout was logged as expected
 
-        current_checkout_results = None
-
-        async def store_updater_cycle_result():  # Saves method returned value because it is started inside a asyncio.gather() call
-            nonlocal current_checkout_results
-            current_checkout_results = await updater._do_updater_cycle()
-
         async def fast_forward_time_then_continue():
             await asyncio.sleep(0)  # Ensures checkout series has begun before we modifies the time
             nonlocal current_time_ns
@@ -167,7 +161,7 @@ class TestStatusUpdater:
 
         current_time_ns = 1000 * 10 ** 6  # We begin checkout series (updater cycle) at time 1000 ms
         await asyncio.gather(  # Starts updater cycle, then fast forward time during 1500 mocked ms
-            asyncio.create_task(store_updater_cycle_result()),
+            asyncio.create_task(updater._do_updater_cycle()),
             asyncio.create_task(fast_forward_time_then_continue())
         )
 
