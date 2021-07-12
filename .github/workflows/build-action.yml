@@ -9,22 +9,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: # Python executables might differ depending on running platform
-          # On Ubuntu 18.04, default python3 is 3.6 < 3.8, so we'll need to call python modules through python3.8 so the correct version
-          # will be executed
-        - name: "ubuntu-18.04"
-          python: "python3.8"
-          pip: "python3.8 -m pip"
-        - name: "ubuntu-20.04"
-          python: "python"
-          pip: "pip"
-          # On Windows, build operation uses tmp virtual envs which don't have a python3.exe file, and as build use the invoked interpreter
-          # to select command to run inside these virtual envs, we need to call for just python running at least 3.7 on this hosted runner
-        - name: "windows-latest"
-          python: "python"
-          pip: "pip"
-    runs-on: ${{matrix.platform.name}}
-    name: ${{matrix.platform.name}} build
+        platform:
+          - "ubuntu-18.04"
+          - "ubuntu-20.04"
+          - "windows-latest"
+    runs-on: ${{matrix.platform}}
+    name: ${{matrix.platform}} build
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -34,21 +24,17 @@ jobs:
         with:
           python-version: 3.8
 
-      - name: Upgrade pip if required # On Ubuntu 18.04, pip default version is outdated and doesn't support setup.cfg
-        if: matrix.platform.name == 'ubuntu-18.04'
-        run: ${{matrix.platform.pip}} install --upgrade pip
-
       - name: Install unit testing framework and build command (dev only, not in requirements)
-        run: ${{matrix.platform.pip}} install pytest-xdist pytest-mock pytest-asyncio build
+        run: pip install pytest-xdist pytest-mock pytest-asyncio build
 
       - name: Install deps
-        run: ${{matrix.platform.pip}} install websockets
+        run: pip install websockets
 
       - name: Generate distribution packages
-        run: ${{matrix.platform.python}} -m build
+        run: python -m build
 
       - name: Install local package
-        run: ${{matrix.platform.pip}} install .
+        run: pip install .
 
       - name: Run tests
         run: pytest -n auto tests
@@ -60,7 +46,7 @@ jobs:
           -subj "/CN=localhost"
 
       - name: Dry run
-        run: ${{matrix.platform.python}} -m rptminigameshub 35550 localhost.pem localhost.key 2000 --dry-run
+        run: python -m rptminigameshub 35550 localhost.pem localhost.key 2000 --dry-run
   publish: # If pushed on stable branch, then a new release has been done and must be published if all tests passed successfully
     if: endsWith(github.ref, 'stable') # Expects ref to be ref/heads/stable
     needs: build
@@ -78,4 +64,3 @@ jobs:
         with:
           user: __token__
           password: ${{secrets.PYPI_API_TOKEN}}
-
