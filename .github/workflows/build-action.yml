@@ -34,10 +34,6 @@ jobs:
         with:
           python-version: 3.8
 
-      - name: Upgrade pip if required # On Ubuntu 18.04, pip default version is outdated and doesn't support setup.cfg
-        if: matrix.platform.name == 'ubuntu-18.04'
-        run: ${{matrix.platform.pip}} install --upgrade pip
-
       - name: Install unit testing framework and build command (dev only, not in requirements)
         run: ${{matrix.platform.pip}} install pytest-xdist pytest-mock pytest-asyncio build
 
