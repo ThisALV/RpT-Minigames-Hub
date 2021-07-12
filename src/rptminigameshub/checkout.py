@@ -88,6 +88,8 @@ class StatusUpdater:
         operation_begin_ms = time.time_ns() * 10 ** -6  # Keeps track of when the operation began to mesure its duration
         self._next_checkout_results = {}  # Resets the results dictionary of the previous operation results
 
+        logger.debug("Begin a new updater cycle.")
+
         checkout_tasks = []
         for port in self.servers_list:  # Run checkout operation concurrently because we're doing the same task on 6 different connections
             checkout_tasks.append(asyncio.create_task(self._store_retrieved_status(port)))
@@ -109,16 +111,23 @@ class StatusUpdater:
         operation_duration_ms = operation_end_ms - operation_begin_ms
 
         # Waits the remaining time of the interval, aka the total interval time - time passed to perform the current checkout series
-        await asyncio.sleep(self.interval_ms - operation_duration_ms)
+        remaining_time_ms = self.interval_ms - operation_duration_ms
+        logger.debug(f"Waiting {remaining_time_ms} ms before the next updater cycle...")
+        await asyncio.sleep(remaining_time_ms)
 
     async def _checkout_server(self, server_port: int) -> "tuple[int, int]":
         """Asynchronously connect to a locally hosted game server and sends CHECKOUT command, then await for response and returns a tuple containing:
         1st the current number of players connected, 2nd the maximal number of players accepted."""
 
+        logger.debug(f"Connecting to local game server :{server_port}...")
         # Tries to connect using secure WebSocket with local game server
         async with websockets.connect(f"wss://localhost:{server_port}", ssl=self.security_context) as connection:
+            logger.debug(f"Connected to local game server :{server_port}.")
+
+            logger.debug(f"Send CHECKOUT command to :{server_port} and wait for its response...")
             await connection.send("CHECKOUT")  # When connected, sends a checkout command to game server
             server_response = await connection.recv()  # When request sent, wait for the serve response to be received
+            logger.debug(f"Game server :{server_port} responded with \"{server_response}\".")
 
             return parse_availability_response(server_response)  # Tries to parse its response and retrieves the result tuple
 
