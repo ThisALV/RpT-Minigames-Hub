@@ -175,7 +175,7 @@ class TestStatusUpdater:
 
         # As initial interval duration between 2 cycles is 5000 ms and this cycle ran for 1500 ms, it should sleep 3500 ms until the next
         # cycle can run
-        mocked_sleep.assert_called_once_with(3500)
+        mocked_sleep.assert_called_with(3500)
 
         # This final checkout results dict should correspond to the status retrieved by checkout operations, here it is the same as the
         # mocked results dict
