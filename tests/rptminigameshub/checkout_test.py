@@ -131,13 +131,8 @@ class TestStatusUpdater:
             35559: (0, 2),
             35560: None,
         }
-        errors_logged = 0  # Counter for logger.error() calls
 
         checkout_delay = asyncio.Event()  # Will be set to indicates checkout operations on game server have completed successfully
-
-        def mocked_error_logging(*_, **__):  # To accept any number of logger.error() arguments
-            nonlocal errors_logged
-            errors_logged += 1  # One more call has been performed
 
         def mocked_time_ns() -> int:  # Will returns current_time_ns, mocked to decide which time a series of checkout operations is taking
             return current_time_ns
@@ -158,8 +153,7 @@ class TestStatusUpdater:
         mocker.patch("time.time_ns", mocked_time_ns)  # Provides a time piloted by this unit test
         mocker.patch.object(updater, "_store_retrieved_status", mocked_store_retrieved_status)  # Provides checkout results piloted by test
         mocked_sleep = mocker.patch("asyncio.sleep")  # Spies duration with which this function is called
-        # Keep tracks of logger.error() calls count to check if errors were logged on timeout
-        mocker.patch("rptminigameshub.checkout.logger.error", mocked_error_logging)
+        mocker.patch("rptminigameshub.checkout.logger.error")  # Spies if error of timed out checkout was logged as expected
 
         current_checkout_results = None
 
@@ -176,8 +170,8 @@ class TestStatusUpdater:
             asyncio.create_task(fast_forward_time_then_continue())
         )
 
-        # As 2 checkout operations timed out, error should have been caught twice and logger.error() should have been called twice too
-        assert errors_logged == 2
+        # As some checkout operations timed out, an error should have been logged to signal this
+        rptminigameshub.checkout.logger.error.assert_called_once()
 
         # As initial interval duration between 2 cycles is 5000 ms and this cycle ran for 1500 ms, it should sleep 3500 ms until the next
         # cycle can run
