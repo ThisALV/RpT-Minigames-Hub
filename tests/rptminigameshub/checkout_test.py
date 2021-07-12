@@ -1,4 +1,7 @@
+import asyncio
+
 from rptminigameshub.checkout import *
+import rptminigameshub.checkout
 import pytest
 import unittest.mock
 
@@ -115,3 +118,71 @@ class TestStatusUpdater:
 
         mocked_checkout_server.assert_awaited_once_with(37373)  # Checks for checkout to have been performed on game server at port 37373
         assert updater._next_checkout_results == {37373: None}  # None result means checkout couldn't have been performed on that server
+
+    @pytest.mark.asyncio
+    async def test_do_updater_cycle(self, mocker, mocked_status_subject, mocked_security_context):
+        current_time_ns = 0  # Used to control the currently mocked time in nanoseconds
+        server_ports_list = [35555, 35556, 35557, 35558, 35559, 35560]  # List of game server to checkout for
+        mocked_checkout_results = {  # Associates a game server port with the result of a checkout operation on that specific game server
+            35555: (0, 2),
+            35556: (1, 2),
+            35557: None,
+            35558: (2, 2),
+            35559: (0, 2),
+            35560: None,
+        }
+        errors_logged = 0  # Counter for logger.error() calls
+
+        checkout_delay = asyncio.Event()  # Will be set to indicates checkout operations on game server have completed successfully
+
+        def mocked_error_logging(*_, **__):  # To accept any number of logger.error() arguments
+            nonlocal errors_logged
+            errors_logged += 1  # One more call has been performed
+
+        def mocked_time_ns() -> int:  # Will returns current_time_ns, mocked to decide which time a series of checkout operations is taking
+            return current_time_ns
+
+        # Copies mocked result inside instance stored result, sometimes checkout times out to verify these errors are handled properly
+        async def mocked_store_retrieved_status(port: int):
+            if port == 35557 or port == 35560:  # For these 2 ports, emulates a game server which is not responding
+                raise asyncio.TimeoutError()  # This will cause checkout operation to not complete in time
+
+            # By waiting this event, we allow the unit test to change current_time_ns before measuring checkout operation duration
+            await checkout_delay.wait()
+            updater._next_checkout_results[port] = mocked_checkout_results[port]
+
+        # Interval and ports list are used by _do_updater_cycle() method so they're provided here with a mocked Subject to check if new
+        # checkout results are published as expected
+        updater = StatusUpdater(5000, server_ports_list, mocked_status_subject, mocked_security_context)
+
+        mocker.patch("time.time_ns", mocked_time_ns)  # Provides a time piloted by this unit test
+        mocker.patch.object(updater, "_store_retrieved_status", mocked_store_retrieved_status)  # Provides checkout results piloted by test
+        mocked_sleep = mocker.patch("asyncio.sleep")  # Spies duration with which this function is called
+        # Keep tracks of logger.error() calls count to check if errors were logged on timeout
+        mocker.patch("rptminigameshub.checkout.logger.error", mocked_error_logging)
+
+        current_checkout_results = None
+
+        async def store_updater_cycle_result():  # Saves method returned value because it is started inside a asyncio.gather() call
+            current_checkout_results = await updater._do_updater_cycle()
+
+        async def fast_forward_time_then_continue():
+            await asyncio.sleep(0)  # Ensures checkout series has begun before we modifies the time
+            current_time_ns = 2500 * 10 ** 6  # We end cycle at time 2500 ms, it took 1500 ms
+
+        current_time_ns = 1000 * 10 ** 6  # We begin checkout series (updater cycle) at time 1000 ms
+        await asyncio.gather(  # Starts updater cycle, then fast forward time during 1500 mocked ms
+            asyncio.create_task(store_updater_cycle_result()),
+            asyncio.create_task(fast_forward_time_then_continue())
+        )
+
+        # As 2 checkout operations timed out, error should have been caught twice and logger.error() should have been called twice too
+        assert errors_logged == 2
+
+        # As initial interval duration between 2 cycles is 5000 ms and this cycle ran for 1500 ms, it should sleep 3500 ms until the next
+        # cycle can run
+        mocked_sleep.assert_called_once_with(3500)
+
+        # This final checkout results dict should correspond to the status retrieved by checkout operations, here it is the same as the
+        # mocked results dict
+        assert updater._next_checkout_results == mocked_checkout_results
