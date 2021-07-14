@@ -36,18 +36,6 @@ class TestServerResponseParsing:
 class TestStatusUpdater:
     """Unit tests for StatusUpdater class methods."""
 
-    @pytest.fixture
-    def mocked_security_context(self, mocker):
-        """Provides a mocked `ssl.SSLContext` object to use with `StatusUpdater` ctor."""
-
-        return mocker.patch("ssl.SSLContext")
-
-    @pytest.fixture
-    def mocked_status_subject(self, mocker):
-        """Provides a mocked `Subject` object to use with `StatusUpdater` ctor."""
-
-        return mocker.patch("rptminigameshub.checkout.Subject")
-
     @pytest.mark.asyncio
     async def test_checkout_server(self, mocker, event_loop, mocked_security_context, mocked_status_subject):
         # Creates a spyable connection instance to mock connction with localhost and check if Python script is behaving as expected
