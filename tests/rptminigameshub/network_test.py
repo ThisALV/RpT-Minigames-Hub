@@ -54,7 +54,11 @@ class TestClientsListener:
         # game server
         server = ClientsListener(0, initial_servers_data, mocked_security_context, mocked_status_subject)
 
-        server._update_servers_data([(0, 2), None, (2, 2)])
+        server._update_servers_data({
+            35555: (0, 2),
+            35557: None,
+            35559: (2, 2)
+        })
         # Checks for the updated game servers data to be the same as initialized but with "availability" properties assigned
         assert server._current_servers_data == [
             {"name": "Açores", "game": "A", "port": 35555, "availability": (0, 2)},
@@ -62,7 +66,11 @@ class TestClientsListener:
             {"name": "Canaries", "game": "C", "port": 35559, "availability": (2, 2)}
         ]
 
-        server._update_servers_data([(1, 2), (0, 2), None])
+        server._update_servers_data({
+            35555: (1, 2),
+            35557: (0, 2),
+            35559: None
+        })
         # Same check as before, excepted than this time we're checking for properties to be updated even if they're already assigned
         assert server._current_servers_data == [
             {"name": "Açores", "game": "A", "port": 35555, "availability": (1, 2)},

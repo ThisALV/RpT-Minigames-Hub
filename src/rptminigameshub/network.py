@@ -40,8 +40,8 @@ class ClientsListener:
         for game_server_data in self._current_servers_data:
             game_server_data["availability"] = None
 
-    def _update_servers_data(self, current_checkout_results: "list[tuple[int, int]]"):
-        """With given game server status list, update "availability" fields into instance game servers data so we can later convert
+    def _update_servers_data(self, current_checkout_results: "dict[int, tuple[int, int]]"):
+        """With given game server status dict, update "availability" fields into instance game servers data so we can later convert
         this data into JSON to sent it to a client."""
 
         for game_server_data in self._current_servers_data:  # Each game server needs to have its data updated
