@@ -53,27 +53,33 @@ class ClientsListener:
             }
 
     @staticmethod
-    async def _wait_for_client_request(connection: websockets.WebSocketServerProtocol, require_update: asyncio.Event):
+    async def _wait_for_client_request(connection: websockets.WebSocketServerProtocol, require_update: asyncio.Event, client_endpoint: str):
         """Waits for a REQUEST message to be received on given connection then fires given event."""
 
         message = await connection.recv()  # Waits for a message to be received from client, will throw if connection is closed
 
         if message != "REQUEST":  # Checks if client request for servers data update is valid
+            logger.error(f"Client {client_endpoint} sent a bad request: \"{message}\"")
             raise BadClientRequest()
 
+        logger.debug(f"Update request sent by {client_endpoint}.")
         require_update.set()
 
-    async def _wait_for_new_status(self, require_update: asyncio.Event):
+    async def _wait_for_new_status(self, require_update: asyncio.Event, client_endpoint: str):
         """Waits for a new value to be published inside status list subject then updates servers data and fires given event."""
 
         new_status_list = await self.status_source.get_next()  # Waits for an eventually updated list of servers status
         self._update_servers_data(new_status_list)  # Updates current game servers data with new "availability" properties
 
+        logger.debug(f"New list inside data source, will be updated for {client_endpoint}.")
         require_update.set()
 
     async def _handle_client(self, connection: websockets.WebSocketServerProtocol):
         """Waits for a REQUEST message to be received on given connection or for a new list of game servers data to be published and
         then send in JSON this new data into the given connection, and repeat until connection is closed."""
+
+        client_endpoint_str = format("%d:%d", *connection.remote_address)  # Connection remote endpoint is a tuple of (host, port)
+        logger.info(f"Serving client {client_endpoint_str}...")
 
         require_update = asyncio.Event()  # This event will be set when one of the two conditions for game servers data to be sent is met
         connection_closed = False  # Will be set to True when a connection closed error will be caught
@@ -88,8 +94,8 @@ class ClientsListener:
                 new_status_list_condition.cancel()
 
             # The two possible conditions for game servers data to be sent again into client connection
-            client_request_condition = asyncio.create_task(ClientsListener._wait_for_client_request(connection, require_update))
-            new_status_list_condition = asyncio.create_task(self._wait_for_new_status(require_update))
+            client_request_condition = asyncio.create_task(ClientsListener._wait_for_client_request(connection, require_update, client_endpoint_str))
+            new_status_list_condition = asyncio.create_task(self._wait_for_new_status(require_update, client_endpoint_str))
             condition_awaiting_task = asyncio.create_task(wait_for_one_condition())
 
             try:
@@ -105,9 +111,18 @@ class ClientsListener:
             finally:  # No matter what happened, ensures we will be ready for the next cycle
                 prepare_next_cycle()  # Might be necessary in case of an error raised at any moment
 
+            logger.debug(f"Sending new servers data for {client_endpoint_str}...")
             # Supports UTF-8 and disables pretty-printing for sent JSON data
             await connection.send(json.dumps(self._current_servers_data, indent=None, ensure_ascii=False))
+            logger.debug(f"Sent data for {client_endpoint_str}.")
+
+        logger.info(f"Disconnected client {client_endpoint_str}.")
 
     async def start(self):
         """Starts a WSS server with instance configuration. Will automatically closes WSS server when exited."""
-        pass
+
+        logger.debug(f"Opening server on port {self.port}...")
+        # Opens a WSS server on configured port with selected certificate and private key, then automatically closes it when exited
+        async with websockets.serve(self._handle_client, host=None, port=self.port, ssl=self.security_ctx) as server:
+            logger.info(f"Server open. Listening for WSS clients on port {self.port}...")
+            await asyncio.Event().wait()  # Will waits indefinitely until the task is cancelled from main script with a Ctrl+C
