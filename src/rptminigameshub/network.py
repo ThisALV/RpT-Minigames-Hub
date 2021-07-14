@@ -22,7 +22,7 @@ class ClientsListener:
     """Listens for incoming WSS connections on given port, then waits for clients to send a `REQUEST` message or for source Subject to emit
     a value for sending the new game servers data to clients."""
 
-    def __init__(self, port: int, servers_config: "dict", security_ctx: ssl.SSLContext, status_source: rptminigameshub.checkout.Subject):
+    def __init__(self, port: int, servers_config: "list[dict]", security_ctx: ssl.SSLContext, status_source: rptminigameshub.checkout.Subject):
         """Configures shortly started server to listen on given port with given security context configuration. New status are obtained
         from given source Subject.
         Servers configuration argument contains details about each server which are not related to their status or availability. These
@@ -32,18 +32,18 @@ class ClientsListener:
         self.security_ctx = security_ctx
         self.status_source = status_source
 
-        # Servers data will be sent as JSON to the clients, so we save the given dictionary as it and we'll change the "availability"
+        # Servers data will be sent as JSON to the clients, so we save the given list as it and we'll change the "availability"
         # value when new status will be retrieved from local game servers.
         self._current_servers_data = servers_config
         # A None value for status means it is currently unknown, so we initialize each game server data with an unknown current status
-        for game_server_data in self._current_servers_data.values():
+        for game_server_data in self._current_servers_data:
             game_server_data["availability"] = None
 
     def _update_servers_data(self, current_checkout_results: "list[tuple[int, int]]"):
         """With given game server status list, update "availability" fields into instance game servers data so we can later convert
         this data into JSON to sent it to a client."""
 
-        for game_server_data in self._current_servers_data.values():  # Each game server needs to have its data updated
+        for game_server_data in self._current_servers_data:  # Each game server needs to have its data updated
             # Retrieves checkout operation result using current game server port
             server_checkout_result = current_checkout_results[game_server_data["port"]]
 
@@ -72,7 +72,7 @@ class ClientsListener:
         require_update.set()
 
     async def _handle_client(self, connection: websockets.WebSocketServerProtocol):
-        """Waits for a REQUEST message to be received on given connection or for a new dict of game servers data to be published and
+        """Waits for a REQUEST message to be received on given connection or for a new list of game servers data to be published and
         then send in JSON this new data into the given connection, and repeat until connection is closed."""
 
         require_update = asyncio.Event()  # This event will be set when one of the two conditions for game servers data to be sent is met
