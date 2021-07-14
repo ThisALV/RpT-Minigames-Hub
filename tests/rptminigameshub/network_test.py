@@ -25,7 +25,8 @@ class TestClientsListener:
         condition_fulfilled_event = asyncio.Event()  # Event passed to method, is set at the end of it
 
         with pytest.raises(BadClientRequest):  # We mocked client to send a bad request, so an error will be raised
-            await ClientsListener._wait_for_client_request(mocked_client_connection, condition_fulfilled_event)
+            # Client endpoint for logging purpose doesn't matter here
+            await ClientsListener._wait_for_client_request(mocked_client_connection, condition_fulfilled_event, "")
 
         # Error should have been raised before setting event as client hasn't requested the update properly
         assert not condition_fulfilled_event.is_set()
@@ -36,7 +37,8 @@ class TestClientsListener:
     async def test_wait_for_client_request_with_good_request(self, mocker, event_loop, mocked_client_connection):
         condition_fulfilled_event = asyncio.Event()  # Event passed to method, is set at the end of it
 
-        await ClientsListener._wait_for_client_request(mocked_client_connection, condition_fulfilled_event)
+        # Client endpoint for logging purpose doesn't matter here
+        await ClientsListener._wait_for_client_request(mocked_client_connection, condition_fulfilled_event, "")
 
         # Coroutine method should have completed successfully, so the event is set
         assert condition_fulfilled_event.is_set()
