@@ -1,7 +1,7 @@
-import asyncio
-
 from rptminigameshub.network import *
 import pytest
+import asyncio
+import websockets
 
 
 class TestClientsListener:
@@ -19,6 +19,27 @@ class TestClientsListener:
         mocker.patch.object(mocked_connection, "recv", mocked_recv)  # Mocks a client which is sending the user-requested message
 
         return mocked_connection
+
+    @pytest.fixture
+    async def error_task(self):
+        """Provides an asyncio task which is immediately raising an error."""
+
+        async def task():
+            raise RuntimeError("A random error")
+
+        return asyncio.create_task(task())
+
+    @pytest.fixture
+    async def infinite_task(self):
+        """Provides an asyncio task which is awaiting indefinitely and which can only be stopped using cancellation."""
+
+        async def task():
+            await asyncio.Event().wait()  # Will wait indefinitely
+
+        return asyncio.create_task(task())
+
+    # Because some unit test might require two concurrent tasks running indefinitely
+    second_infinite_task = infinite_task
 
     # Uses a mocked connection from a client sending "A BAD REQUEST"
     @pytest.mark.parametrize("mocked_client_connection", ["A BAD REQUEST"], indirect=True)
@@ -124,3 +145,72 @@ class TestClientsListener:
 
         assert condition_fulfilled.is_set()  # Should have been set as method should have reached its end without errors
         mocked_update_servers_data.assert_called_once_with({35555: (1, 2)})  # Checks if instance data is updated with published data
+
+    @pytest.mark.asyncio
+    async def test_wait_for_required_update_unexpected_error(self, error_task, infinite_task):
+        with pytest.raises(RuntimeError):  # error_task raises an error which is unexpected, so it is transmitted through the caller
+            # Event is not modified by this static method itself so its behavior and value isn't interesting for us
+            await ClientsListener._wait_for_required_update(asyncio.Event(), error_task, infinite_task, "")
+
+        # Method should ensure both given condition task are finished to prepare the next client handling cycle, even if an error was
+        # raised
+        assert error_task.done()
+        assert infinite_task.done()
+
+    @pytest.mark.asyncio
+    async def test_wait_for_required_update_condition_task_cancelled(self, infinite_task, second_infinite_task):
+        async def cancel_one_condition_task():  # Cancels one of the two tasks waiting for updating required condition
+            second_infinite_task.cancel()
+
+        # As cancellation is not caused by connection closure or by the other task being finished, the error must be propagated
+        with pytest.raises(asyncio.CancelledError):
+            tested_method_task = asyncio.create_task(
+                ClientsListener._wait_for_required_update(asyncio.Event(), infinite_task, second_infinite_task, "")
+            )
+
+            # Waits for both tasks then unexpectedly cancels one of them
+            await asyncio.gather(tested_method_task, asyncio.create_task(cancel_one_condition_task()))
+
+        # Method should ensure both given condition task are finished to prepare the next client handling cycle, even if an error was
+        # raised
+        assert infinite_task.done()
+        assert second_infinite_task.done()
+
+    @pytest.mark.asyncio
+    async def test_wait_for_required_update_connection_closed(self, infinite_task):
+        async def stop_recv_connection_closed():  # Emulates a recv() awaiting coroutine interrupted because of a closed connection
+            # Connection closed normally in that case, but it could also be closed with another code than 1000
+            raise websockets.ConnectionClosedOK(1000, "")
+
+        # Must be accessible to check if it was properly cancelled by method
+        mocked_client_listener_task = asyncio.create_task(stop_recv_connection_closed())
+
+        # As connection will be closed, it will execute normally with a return value of True
+        connection_closed = await ClientsListener._wait_for_required_update(
+            asyncio.Event(), mocked_client_listener_task, infinite_task, ""
+        )
+
+        assert connection_closed  # ConnectionClosed should have been caught
+        # Both condition awaiting tasks should be finished at method exit
+        assert mocked_client_listener_task.done()
+        assert infinite_task.done()
+
+    @pytest.mark.asyncio
+    async def test_wait_for_required_update_one_condition_task_finished(self, infinite_task):
+        require_update = asyncio.Event()  # Event passed to condition awaiting coroutines, fired when a condition is fulfilled
+
+        async def mocked_condition_task():  # Immediately fire the require_update event
+            require_update.set()
+
+        mocked_new_status_list_awaiter = asyncio.create_task(mocked_condition_task())
+
+        # As one condition task finished, it should have fired the require_update event, so we expect function to normally return with
+        # the value False
+        connection_closed = await ClientsListener._wait_for_required_update(
+            require_update, infinite_task, mocked_new_status_list_awaiter, ""
+        )
+
+        assert not connection_closed  # No ConnectionClosedError caught
+        # Both condition awaiting tasks should be finished at method exit
+        assert infinite_task.done()
+        assert mocked_new_status_list_awaiter.done()
