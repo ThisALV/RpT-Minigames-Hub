@@ -152,6 +152,9 @@ class TestClientsListener:
             # Event is not modified by this static method itself so its behavior and value isn't interesting for us
             await ClientsListener._wait_for_required_update(asyncio.Event(), error_task, infinite_task, "")
 
+        # Performs a whole event loop cycle to ensures condition tasks cancellation requests have been handled by asyncio
+        await asyncio.sleep(0)
+
         # Method should ensure both given condition task are finished to prepare the next client handling cycle, even if an error was
         # raised
         assert error_task.done()
@@ -189,6 +192,9 @@ class TestClientsListener:
         connection_closed = await ClientsListener._wait_for_required_update(
             asyncio.Event(), mocked_client_listener_task, infinite_task, ""
         )
+
+        # Performs a whole event loop cycle to ensures condition tasks cancellation requests have been handled by asyncio
+        await asyncio.sleep(0)
 
         assert connection_closed  # ConnectionClosed should have been caught
         # Both condition awaiting tasks should be finished at method exit
