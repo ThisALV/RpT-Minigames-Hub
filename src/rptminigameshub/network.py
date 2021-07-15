@@ -48,10 +48,12 @@ class ClientsListener:
             # Retrieves checkout operation result using current game server port
             server_checkout_result = current_checkout_results[game_server_data["port"]]
 
-            game_server_data["availability"] = {  # Updates status data inside this game server data
-                "playersCount": server_checkout_result[0],  # 1st tuple element is number of players currently connected
-                "playersLimit": server_checkout_result[1]   # 2nd tuple element is the maximum number of players accepted at the same time
-            }
+            # If the checkout operation failed, we have no status to assigns inside this server data se we keep the last status obtained
+            if server_checkout_result is not None:
+                game_server_data["availability"] = {  # Updates status data inside this game server data
+                    "playersCount": server_checkout_result[0],  # 1st tuple element is number of players currently connected
+                    "playersLimit": server_checkout_result[1]  # 2nd tuple element is the maximum number of players accepted at the same time
+                }
 
     @staticmethod
     async def _wait_for_client_request(connection: websockets.WebSocketServerProtocol, require_update: asyncio.Event, client_endpoint: str):
