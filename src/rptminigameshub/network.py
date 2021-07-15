@@ -92,6 +92,7 @@ class ClientsListener:
         def prepare_next_cycle():  # Prepares the next loop cycle by cleaning every possibly running task for current cycle
             client_request_condition.cancel()
             new_status_condition.cancel()
+            condition_awaiting_task.cancel()
 
         condition_awaiting_task = asyncio.create_task(wait_for_one_condition())
 
