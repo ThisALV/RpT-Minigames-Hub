@@ -61,9 +61,19 @@ class TestClientsListener:
         })
         # Checks for the updated game servers data to be the same as initialized but with "availability" properties assigned
         assert server._current_servers_data == [
-            {"name": "Açores", "game": "A", "port": 35555, "availability": (0, 2)},
-            {"name": "Bermudes", "game": "B", "port": 35557, "availability": None},
-            {"name": "Canaries", "game": "C", "port": 35559, "availability": (2, 2)}
+            {
+                "name": "Açores", "game": "A", "port": 35555, "availability": {
+                    "playersCount": 0, "playersLimit": 2
+                }
+            },
+            {
+                "name": "Bermudes", "game": "B", "port": 35557, "availability": None
+            },
+            {
+                "name": "Canaries", "game": "C", "port": 35559, "availability": {
+                    "playersCount": 2, "playersLimit": 2
+                }
+            }
         ]
 
         server._update_servers_data({
@@ -73,7 +83,19 @@ class TestClientsListener:
         })
         # Same check as before, excepted than this time we're checking for properties to be updated even if they're already assigned
         assert server._current_servers_data == [
-            {"name": "Açores", "game": "A", "port": 35555, "availability": (1, 2)},
-            {"name": "Bermudes", "game": "B", "port": 35557, "availability": (0, 2)},
-            {"name": "Canaries", "game": "C", "port": 35559, "availability": None}
+            {
+                "name": "Açores", "game": "A", "port": 35555, "availability": {
+                    "playersCount": 1, "playersLimit": 2
+                }
+            },
+            {
+                "name": "Bermudes", "game": "B", "port": 35557, "availability": {
+                    "playersCount": 0, "playersLimit": 2
+                }
+            },
+            {
+                "name": "Canaries", "game": "C", "port": 35559, "availability": {
+                    "playersCount": 2, "playersLimit": 2  # Checkout failed (None value) so we keep the last status assigned
+                }
+            }
         ]
