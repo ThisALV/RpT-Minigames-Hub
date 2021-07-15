@@ -1,3 +1,5 @@
+import asyncio
+
 from rptminigameshub.network import *
 import pytest
 
@@ -99,3 +101,26 @@ class TestClientsListener:
                 }
             }
         ]
+
+    @pytest.mark.asyncio
+    async def test_wait_for_new_status(self, mocker, mocked_status_subject, mocked_security_context):
+        async def mocked_get_next():  # Mocks a servers list containing one server on port 35555 having already 1 player connected
+            return {35555: (1, 2)}
+
+        # Unit test pilotes which servers are listed and what is their status
+        mocker.patch.object(mocked_status_subject, "get_next", mocked_get_next)
+        # We mocks a game server checkout on 35555, this server data must be passed to ClientsListener ctor to exist inside instance
+        # servers data so it can be updater later
+        initial_servers_data = [{"name": "Açores", "game": "A", "port": 35555}]
+
+        # Port number isn't used here. Mocked subject allows us to provide arbitral servers checkout results
+        server = ClientsListener(0, initial_servers_data, mocked_security_context, mocked_status_subject)
+        # We don't care about instance data here, we just check if it is updated with correct retrieved status
+        mocked_update_servers_data = mocker.patch.object(server, "_update_servers_data")
+
+        condition_fulfilled = asyncio.Event()  # Set at end of the tested method
+
+        await server._wait_for_new_status(condition_fulfilled, "")  # Client endpoint for logging purpose doesn't matter here
+
+        assert condition_fulfilled.is_set()  # Should have been set as method should have reached its end without errors
+        mocked_update_servers_data.assert_called_once_with({35555: (1, 2)})  # Checks if instance data is updated with published data
