@@ -81,7 +81,7 @@ class ClientsListener:
     async def _wait_for_required_update(require_update: asyncio.Event, client_request_condition: asyncio.Task, new_status_condition: asyncio.Task, client_endpoint: str) -> bool:
         """Waits for 1 of the 2 given tasks to finish or to be cancelled, then cancel the other one. This method ensures the two given 
         tasks are cancelled when it returns.
-        Returns true if a `ConnectionClosedError` was raised during the tasks awaiting, `false` otherwise."""
+        Returns true if a `ConnectionClosed` was raised during the tasks awaiting, `false` otherwise."""
 
         connection_closed = False  # Will be set to True when a connection closed error will be caught
 
@@ -99,7 +99,7 @@ class ClientsListener:
             logger.debug(f"Waiting for update to be required for client {client_endpoint}...")
             # Runs task to wait for one of the two condition, then performs tasks cleaning work when one condition if fulfilled
             await asyncio.gather(client_request_condition, new_status_condition, condition_awaiting_task)
-        except websockets.ConnectionClosedError:  # If client_request_condition thrown and connection with client is closed
+        except websockets.ConnectionClosed:  # If client_request_condition thrown and connection with client is closed
             connection_closed = True  # We must no longer be sending game servers data on this condition
         except asyncio.CancelledError:
             # If connection has been closed or a new game servers sync must be done with the client, then it normal that condition
