@@ -77,13 +77,12 @@ class ClientsListener:
         logger.debug(f"New list inside data source, will be updated for {client_endpoint}.")
         require_update.set()
 
-    async def _client_serving_cycle(self, connection: websockets.WebSocketServerProtocol, client_endpoint: str) -> bool:
-        """Performs a serving cycle for the client, that is, waits for a request to be received or for a new value to be published, then
-        sends new game servers data to this client.
-        Unexpected errors are caught by caller.
-        Returns `true` if connection is still open, `false` otherwise."""
+    @staticmethod
+    async def _wait_for_required_update(require_update: asyncio.Event, client_request_condition: asyncio.Task, new_status_condition: asyncio.Task, client_endpoint: str) -> bool:
+        """Waits for 1 of the 2 given tasks to finish or to be cancelled, then cancel the other one. This method ensures the two given 
+        tasks are cancelled when it returns.
+        Returns true if a `ConnectionClosedError` was raised during the tasks awaiting, `false` otherwise."""
 
-        require_update = asyncio.Event()  # This event will be set when one of the two conditions for game servers data to be sent is met
         connection_closed = False  # Will be set to True when a connection closed error will be caught
 
         async def wait_for_one_condition():  # Waits for one of the two required condition to update to be met and prepares next cycle
@@ -92,16 +91,14 @@ class ClientsListener:
 
         def prepare_next_cycle():  # Prepares the next loop cycle by cleaning every possibly running task for current cycle
             client_request_condition.cancel()
-            new_status_list_condition.cancel()
+            new_status_condition.cancel()
 
-        # The two possible conditions for game servers data to be sent again into client connection
-        client_request_condition = asyncio.create_task(ClientsListener._wait_for_client_request(connection, require_update, client_endpoint))
-        new_status_list_condition = asyncio.create_task(self._wait_for_new_status(require_update, client_endpoint))
         condition_awaiting_task = asyncio.create_task(wait_for_one_condition())
 
         try:
+            logger.debug(f"Waiting for update to be required for client {client_endpoint}...")
             # Runs task to wait for one of the two condition, then performs tasks cleaning work when one condition if fulfilled
-            await asyncio.gather(client_request_condition, new_status_list_condition, condition_awaiting_task)
+            await asyncio.gather(client_request_condition, new_status_condition, condition_awaiting_task)
         except websockets.ConnectionClosedError:  # If client_request_condition thrown and connection with client is closed
             connection_closed = True  # We must no longer be sending game servers data on this condition
         except asyncio.CancelledError:
@@ -112,10 +109,31 @@ class ClientsListener:
         finally:  # If error raised, avoids tasks to running silently in background. If not, prepares the next cycle tasks.
             prepare_next_cycle()  # Might be necessary in case of an error raised at any moment
 
-        logger.debug(f"Sending new servers data for {client_endpoint}...")
-        # Supports UTF-8 and disables pretty-printing for sent JSON data
-        await connection.send(json.dumps(self._current_servers_data, indent=None, ensure_ascii=False))
-        logger.debug(f"Sent data for {client_endpoint}.")
+        return connection_closed
+
+    async def _client_serving_cycle(self, connection: websockets.WebSocketServerProtocol, client_endpoint: str) -> bool:
+        """Performs a serving cycle for the client, that is, waits for a request to be received or for a new value to be published, then
+        sends new game servers data to this client.
+        Unexpected errors are caught by caller.
+        Returns `true` if connection is still open, `false` otherwise."""
+        
+        require_update = asyncio.Event()  # This event will be set when one of the two conditions for game servers data to be sent is met
+
+        # The two possible conditions for game servers data to be sent again into client connection
+        client_request_condition = asyncio.create_task(ClientsListener._wait_for_client_request(connection, require_update, client_endpoint))
+        new_status_list_condition = asyncio.create_task(self._wait_for_new_status(require_update, client_endpoint))
+
+        # Will wait until a condition required to send updated servers data is met, also returning if connection was closed when listening
+        # for a client request inside client_request_condition task
+        connection_closed = await ClientsListener._wait_for_required_update(
+            require_update, client_request_condition, new_status_list_condition, client_endpoint
+        )
+
+        if not connection_closed:  # Doesn't try to send data if connection was closed when we were awaiting
+            logger.debug(f"Sending new servers data for {client_endpoint}...")
+            # Supports UTF-8 and disables pretty-printing for sent JSON data
+            await connection.send(json.dumps(self._current_servers_data, indent=None, ensure_ascii=False))
+            logger.debug(f"Sent data for {client_endpoint}.")
 
         return not connection_closed
 
