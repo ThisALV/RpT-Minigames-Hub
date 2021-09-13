@@ -1,3 +1,5 @@
+import unittest.mock
+
 from rptminigameshub.network import *
 import pytest
 import asyncio
@@ -40,6 +42,36 @@ class TestClientsListener:
 
     # Because some unit test might require two concurrent tasks running indefinitely
     second_infinite_task = infinite_task
+
+    @pytest.fixture
+    async def mocked_client_endpoint(self):
+        """Provides an emulated client endpoint passed to every task and method."""
+
+        return "127.0.0.1:50505"
+
+    @pytest.fixture
+    async def server_with_mocked_conditions(self, mocker, mocked_status_subject, mocked_security_context, mocked_client_endpoint, request):
+        """Provides a ClientListener instance with mocked conditions awaiting coroutine to check for subroutines provided arguments."""
+
+        # Mocked listener instance to invoke tested method. For that method neither port, games data, SSL features nor status subject
+        # are important
+        server = ClientsListener(0, [], mocked_security_context, mocked_status_subject)
+
+        # Performs argument checking to control if arguments used with condition waiting coroutines are correct
+        # Will return desired value to control case where connection is closed or not, or immediately raises error if None is passed
+        async def mocked_condition_waiting(require_update, client_request_condition, new_status_condition, client_endpoint):
+            if request.param is None:  # To tests the case where an exception is raided by this subroutine
+                raise RuntimeError()
+
+            # Performs arguments checking instead of starting conditions awaiting coroutines
+            assert client_endpoint == mocked_client_endpoint
+            assert not require_update.is_set()
+
+            return request.param
+
+        mocker.patch("rptminigameshub.network.ClientsListener._wait_for_required_update", mocked_condition_waiting)
+
+        return server
 
     # Uses a mocked connection from a client sending "A BAD REQUEST"
     @pytest.mark.parametrize("mocked_client_connection", ["A BAD REQUEST"], indirect=True)
@@ -220,3 +252,49 @@ class TestClientsListener:
         # Both condition awaiting tasks should be finished at method exit
         assert infinite_task.done()
         assert mocked_new_status_list_awaiter.done()
+
+    @pytest.mark.parametrize("server_with_mocked_conditions", [True], indirect=True)
+    @pytest.mark.asyncio
+    async def test_client_serving_cycle_connection_closed(self, mocker, server_with_mocked_conditions, mocked_client_endpoint):
+        # Mocks connection to check for operations done on it
+        mocked_client_connection = mocker.patch("websockets.WebSocketServerProtocol")
+        # send() must be awaitable, so we manually assign an async mocked method to it
+        mocked_send = mocker.patch.object(mocked_client_connection, "send", unittest.mock.AsyncMock())
+
+        continue_serving_client = await server_with_mocked_conditions._client_serving_cycle(
+            mocked_client_connection, mocked_client_endpoint
+        )
+
+        # As connection has been closed, we should no longer be serving this client
+        mocked_send.assert_not_called()
+        assert not continue_serving_client
+
+    @pytest.mark.parametrize("server_with_mocked_conditions", [False], indirect=True)
+    @pytest.mark.asyncio
+    async def test_client_serving_cycle_connection_still_open(self, mocker, server_with_mocked_conditions, mocked_client_endpoint):
+        # Mocks connection to check for operations done on it
+        mocked_client_connection = mocker.patch("websockets.WebSocketServerProtocol")
+        # send() must be awaitable, so we manually assign an async mocked method to it
+        mocked_send = mocker.patch.object(mocked_client_connection, "send", unittest.mock.AsyncMock())
+
+        continue_serving_client = await server_with_mocked_conditions._client_serving_cycle(
+            mocked_client_connection, mocked_client_endpoint
+        )
+
+        # As connection is still open, we should continue to serve this client
+        mocked_send.assert_called_once()
+        assert continue_serving_client
+
+    @pytest.mark.parametrize("server_with_mocked_conditions", [None], indirect=True)
+    @pytest.mark.asyncio
+    async def test_client_serving_cycle_connection_error_raised(self, mocker, server_with_mocked_conditions, mocked_client_endpoint):
+        # Mocks connection to check for operations done on it
+        mocked_client_connection = mocker.patch("websockets.WebSocketServerProtocol")
+        # send() must be awaitable, so we manually assign an async mocked method to it
+        mocked_send = mocker.patch.object(mocked_client_connection, "send", unittest.mock.AsyncMock())
+
+        # Internal tasks awaiting throws error as None parameter has been given to mocked ClientsListener fixture
+        with pytest.raises(RuntimeError):
+            continue_serving_client = await server_with_mocked_conditions._client_serving_cycle(
+                mocked_client_connection, mocked_client_endpoint
+            )
