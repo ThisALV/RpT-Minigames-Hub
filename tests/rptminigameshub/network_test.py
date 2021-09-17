@@ -334,7 +334,7 @@ class TestClientsListener:
         server = ClientsListener(0, [], mocked_security_context, mocked_status_subject)
 
         # Used to check if errors are logged as expected when catching exceptions
-        mocked_logger = mocker.patch("rptminigameshub.network.logger.error")
+        mocked_logger = mocker.patch("rptminigameshub.network.logger")
 
         async def mocked_failed_client_serving_cycle(*_):
             """Throws an error when trying to serve client so we can test exceptions catching."""
