@@ -298,3 +298,53 @@ class TestClientsListener:
             continue_serving_client = await server_with_mocked_conditions._client_serving_cycle(
                 mocked_client_connection, mocked_client_endpoint
             )
+
+    @pytest.mark.asyncio
+    async def test_handle_client_connection_closed(self, mocker, mocked_security_context, mocked_status_subject, mocked_client_connection):
+        # Mocked listener instance to invoke tested method. For that method neither port, games data, SSL features nor status subject
+        # are important
+        server = ClientsListener(0, [], mocked_security_context, mocked_status_subject)
+
+        serving_cycles = 0  # Keeps track about how many times a service cycle has actually been called for this client
+
+        async def mocked_client_serving_cycle(*_):
+            """Keeps track about how many times it has been called, and simulates a connection closure when 5 have been done."""
+
+            nonlocal serving_cycles  # Enclosing scope tests if loop has iterated has many times as it should
+            connection_closure = serving_cycles == 5
+
+            if not connection_closure:
+                serving_cycles += 1  # One more client sent message if connection is not closed
+
+            return not connection_closure
+
+        mocker.patch.object(server, "_client_serving_cycle", wraps=mocked_client_serving_cycle)
+
+        # Handling a fake client serving cycles to test if we loop on cycles while connection is open as it is expected
+        await server._handle_client(mocked_client_connection)
+
+        # At this point, after 5 serving cycles, connection closure is simulated so _handle_client coroutine should be done and should
+        # have iterated the expected number of times
+        assert serving_cycles == 5
+
+    @pytest.mark.asyncio
+    async def test_handle_client_error_raised(self, mocker, mocked_security_context, mocked_status_subject, mocked_client_connection):
+        # Mocked listener instance to invoke tested method. For that method neither port, games data, SSL features nor status subject
+        # are important
+        server = ClientsListener(0, [], mocked_security_context, mocked_status_subject)
+
+        # Used to check if errors are logged as expected when catching exceptions
+        mocked_logger = mocker.patch("rptminigameshub.network.logger.error")
+
+        async def mocked_failed_client_serving_cycle(*_):
+            """Throws an error when trying to serve client so we can test exceptions catching."""
+
+            raise RuntimeError()
+
+        mocker.patch.object(server, "_client_serving_cycle", wraps=mocked_failed_client_serving_cycle)
+
+        # Handling this client will lead to loop being interrupted because of an error raised by the serving method
+        await server._handle_client(mocked_client_connection)
+
+        # At this point, error should have caused loop termination, then method exits and error should have been logged
+        mocked_logger.error.assert_called()
