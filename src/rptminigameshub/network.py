@@ -147,7 +147,7 @@ class ClientsListener:
 
         try:  # An error which is occurring for a client might not be propagated, it should only crash the serving process for that client
             # Will stops if serving cycle returns False, that is, if connection with client is closed
-            while self._client_serving_cycle(connection, client_endpoint_str):
+            while await self._client_serving_cycle(connection, client_endpoint_str):
                 pass
         except Exception as err:
             err_msg = err.args[0] if len(err.args) > 0 else ""
