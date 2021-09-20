@@ -53,7 +53,8 @@ class Subject:
         self.awaitable = asyncio.Future()  # Awaitable low-lvl object to put values inside
 
     def next(self, value):
-        """Provides each subscriber with data given as argument."""
+        """Provides each subscriber with data given as argument. Raises InvalidStateError if a value is already pushed and hasn't
+        been polled."""
 
         self.awaitable.set_result(value)  # Provides awaitable object a value
 
@@ -63,9 +64,10 @@ class Subject:
         return self.latest
 
     async def get_next(self):
-        """Waits for the next value published and returns it. *Please note this method does NOT support concurrency.*"""
+        """Waits for the next value published and returns it. *Please note this method does NOT support concurrency, that is, it
+        CANNOT be awaited by multiple callers.*"""
 
-        polled_value = await self.awaitable.result()  # Waits for a next value to be available
+        polled_value = await self.awaitable  # Waits for a next value to be available
         self.awaitable = asyncio.Future()  # Resets awaitable so there is no longer any value to retrieve
 
         return polled_value  # Retrieves the polled value to caller
