@@ -48,19 +48,27 @@ class Subject:
 
     def __init__(self):
         """Initializes subject with no subscriber and no values already pushed."""
-        pass
+
+        self.latest = None  # At beginning, there is no value, but trying to retrieve it is still a valid operation
+        self.awaitable = asyncio.Future()  # Awaitable low-lvl object to put values inside
 
     def next(self, value):
         """Provides each subscriber with data given as argument."""
-        pass
+
+        self.awaitable.set_result(value)  # Provides awaitable object a value
 
     def get_current(self):
-        """Returns the last value published inside this Subject instance."""
-        pass
+        """Returns the latest value published inside this Subject instance, or None if no value has been provided yet."""
+
+        return self.latest
 
     async def get_next(self):
-        """Waits for the next value published and returns it."""
-        pass
+        """Waits for the next value published and returns it. *Please note this method does NOT support concurrency.*"""
+
+        polled_value = await self.awaitable.result()  # Waits for a next value to be available
+        self.awaitable = asyncio.Future()  # Resets awaitable so there is no longer any value to retrieve
+
+        return polled_value  # Retrieves the polled value to caller
 
 
 class StatusUpdater:
