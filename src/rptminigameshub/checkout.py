@@ -57,6 +57,7 @@ class Subject:
         been polled."""
 
         self.awaitable.set_result(value)  # Provides awaitable object a value
+        self.latest = value  # If set_result hasn't throw then value has been pushed successfully and current one should be updated
 
     def get_current(self):
         """Returns the latest value published inside this Subject instance, or None if no value has been provided yet."""
