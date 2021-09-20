@@ -182,7 +182,7 @@ async def main(argv: "list[str]"):
     # Configures periodic checkout with created ports list to start it later
     updater = rptminigameshub.checkout.StatusUpdater(checkouts_interval, local_ports(servers), current_servers_status, client_security_ctx)
     # Configures server with listening port and configured TLS features
-    server = rptminigameshub.network.ClientsListener(port, server_security_ctx, current_servers_status)
+    server = rptminigameshub.network.ClientsListener(port, servers, server_security_ctx, current_servers_status)
 
     logger.info("Start hub server.")
     await run_server(server, updater, dry_run)

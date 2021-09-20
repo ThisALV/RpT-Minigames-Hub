@@ -54,6 +54,14 @@ class Subject:
         """Provides each subscriber with data given as argument."""
         pass
 
+    def get_current(self):
+        """Returns the last value published inside this Subject instance."""
+        pass
+
+    async def get_next(self):
+        """Waits for the next value published and returns it."""
+        pass
+
 
 class StatusUpdater:
     """Periodically performs a checkout on every listed server to update a subject containing latest known servers status."""
