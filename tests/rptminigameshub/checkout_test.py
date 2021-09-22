@@ -5,6 +5,45 @@ import unittest.mock
 import asyncio
 
 
+class TestSubject:
+    """Unit tests for Subject methods."""
+
+    @pytest.mark.asyncio
+    async def test_ctor(self):
+        subject = Subject()  # Calls class ctor
+
+        assert subject.get_current() is None  # There isn't any value which has been pushed yet
+        with pytest.raises(asyncio.InvalidStateError):
+            subject.awaitable.result()  # Should throws error as no value is pushed on initial state
+
+    @pytest.mark.asyncio
+    async def test_next(self):
+        subject = Subject()
+        subject.next(0)  # Pushes a value into subject
+
+        assert subject.get_current() == 0  # Our current value (the most updated value which was pushed) should be that value we just pushed
+        with pytest.raises(asyncio.InvalidStateError):
+            subject.next(1)  # Should throws as current value hasn't been polled yes and is still inside the subject future
+
+    @pytest.mark.asyncio
+    async def test_get_next(self):
+        subject = Subject()
+
+        async def push_new_value():
+            await asyncio.sleep(0)  # Gives priority to the another coroutine so we ensure it is awaiting when we pushes the new value
+            subject.next(0)  # Pushes a new value into the subject
+
+        async def wait_new_value():
+            polled_value = await subject.get_next()  # Waits for the other coroutine to push its value into the subject
+            assert polled_value == 0  # This should be the value pushed by the other coroutine (push_new_value)
+
+        # Pushes a value into the subject and test if it is polled as expected
+        await asyncio.gather(asyncio.create_task(push_new_value()), asyncio.create_task(wait_new_value()))
+
+        subject.next(1)  # We should now be able to push a new value as the previous one has been polled from the subject
+        assert subject.get_current() == 1  # And the latest value should be updated as well
+
+
 class TestServerResponseParsing:
     """Unit tests for different parse_availability_response() test cases."""
 
