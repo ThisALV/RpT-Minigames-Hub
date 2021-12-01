@@ -138,9 +138,9 @@ class ClientsListener:
 
         return not connection_closed
 
-    async def _handle_client(self, connection: websockets.WebSocketServerProtocol):
+    async def _handle_client(self, connection: websockets.WebSocketServerProtocol, _: str = ""):
         """Waits for a REQUEST message to be received on given connection or for a new list of game servers data to be published and
-        then send in JSON this new data into the given connection, and repeat until connection is closed."""
+        then send in JSON this new data into the given connection, and repeat until connection is closed. Unused argument is the request URI."""
 
         client_endpoint_str = format("%d:%d", *connection.remote_address)  # Connection remote endpoint is a tuple of (host, port)
         logger.info(f"Serving client {client_endpoint_str}...")
@@ -162,6 +162,6 @@ class ClientsListener:
 
         logger.debug(f"Opening server on port {self.port}...")
         # Opens a WSS server on configured port with selected certificate and private key, then automatically closes it when exited
-        async with websockets.serve(self._handle_client, host=None, port=self.port, ssl=self.security_ctx) as server:
+        async with websockets.serve(self._handle_client, host=None, port=self.port, ssl=self.security_ctx):
             logger.info(f"Server open. Listening for WSS clients on port {self.port}...")
             await asyncio.Event().wait()  # Will waits indefinitely until the task is cancelled from main script with a Ctrl+C
