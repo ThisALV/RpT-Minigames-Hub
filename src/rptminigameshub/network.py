@@ -142,7 +142,7 @@ class ClientsListener:
         """Waits for a REQUEST message to be received on given connection or for a new list of game servers data to be published and
         then send in JSON this new data into the given connection, and repeat until connection is closed. Unused argument is the request URI."""
 
-        client_endpoint_str = format("%d:%d", *connection.remote_address)  # Connection remote endpoint is a tuple of (host, port)
+        client_endpoint_str = "{}:{}".format(*connection.remote_address)  # Connection remote endpoint is a tuple of (host, port)
         logger.info(f"Serving client {client_endpoint_str}...")
 
         try:  # An error which is occurring for a client might not be propagated, it should only crash the serving process for that client
