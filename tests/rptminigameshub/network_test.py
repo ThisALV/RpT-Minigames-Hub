@@ -19,6 +19,7 @@ class TestClientsListener:
 
         mocked_connection = mocker.patch("websockets.WebSocketServerProtocol")  # Creates a mockable connection object
         mocker.patch.object(mocked_connection, "recv", mocked_recv)  # Mocks a client which is sending the user-requested message
+        mocked_connection.remote_address = ("test", 0)  # Returns a mocked endpoint required by logging features
 
         return mocked_connection
 
