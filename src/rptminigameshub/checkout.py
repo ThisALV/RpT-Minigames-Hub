@@ -66,10 +66,14 @@ class Subject:
 
     async def get_next(self):
         """Waits for the next value published and returns it. *Please note this method does NOT support concurrency, that is, it
-        CANNOT be awaited by multiple callers.*"""
+        CANNOT be awaited by multiple callers.*
 
-        polled_value = await self.awaitable  # Waits for a next value to be available
-        self.awaitable = asyncio.Future()  # Resets awaitable so there is no longer any value to retrieve
+        Can be cancelled when awaiting, class instance will still be valid."""
+
+        try:  # Might be cancelled
+            polled_value = await self.awaitable  # Waits for a next value to be available
+        finally:  # Resets required even if cancelled, or class instance will no longer work
+            self.awaitable = asyncio.Future()  # Resets awaitable so there is no longer any value to retrieve
 
         return polled_value  # Retrieves the polled value to caller
 

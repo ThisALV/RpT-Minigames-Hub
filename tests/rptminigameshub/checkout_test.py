@@ -26,7 +26,7 @@ class TestSubject:
             subject.next(1)  # Should throws as current value hasn't been polled yes and is still inside the subject future
 
     @pytest.mark.asyncio
-    async def test_get_next(self):
+    async def test_get_next_finished(self):
         subject = Subject()
 
         async def push_new_value():
@@ -42,6 +42,31 @@ class TestSubject:
 
         subject.next(1)  # We should now be able to push a new value as the previous one has been polled from the subject
         assert subject.get_current() == 1  # And the latest value should be updated as well
+
+    @pytest.mark.asyncio
+    async def test_get_next_cancelled(self):
+        subject = Subject()
+
+        # Will be cancelled, so get_next await call will have to handle cancellation
+        async def wait_new_value():
+            try:
+                await subject.get_next()
+            except asyncio.CancelledError:  # Will be cancelled, but we do not want asyncio.gather to throw inside the unit test
+                pass
+
+        wait_new_value_task = asyncio.create_task(wait_new_value())
+
+        # Will cancel wait_new_value coroutine
+        async def cancel_waiting():
+            await asyncio.sleep(0)  # Ensures get_next from wait_new_value is awaited first
+            wait_new_value_task.cancel()
+
+        # Wait for get_next then cancel while waiting
+        await asyncio.gather(asyncio.create_task(cancel_waiting()), wait_new_value_task)
+
+        # Despite having been cancelled during an await operation, the internal Future object should still work
+        subject.next(1)
+        assert subject.get_current() == 1
 
 
 class TestServerResponseParsing:
