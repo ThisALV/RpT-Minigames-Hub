@@ -222,6 +222,9 @@ class TestStatusUpdater:
             asyncio.create_task(fast_forward_time_then_continue())
         )
 
+        # We expect new status list retrieved from mock to have been pushed inside hub subject, so it can be used by the network module
+        mocked_status_subject.next.assert_called_once_with(mocked_checkout_results)
+
         # As some checkout operations timed out, an error should have been logged to signal this
         rptminigameshub.checkout.logger.error.assert_called_once()
 

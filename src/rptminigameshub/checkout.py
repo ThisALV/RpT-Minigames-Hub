@@ -131,6 +131,9 @@ class StatusUpdater:
                 if port not in self._next_checkout_results:
                     self._next_checkout_results[port] = None
 
+        # We update the hub with our new retrieved values from game servers
+        self.status_target.next(self._next_checkout_results)
+
         # Calculates the final duration of this checkout series operation
         operation_end_s = time.time()
         operation_duration_s = operation_end_s - operation_begin_s
