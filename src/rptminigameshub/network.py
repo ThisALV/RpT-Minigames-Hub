@@ -149,11 +149,13 @@ class ClientsListener:
             # Will stops if serving cycle returns False, that is, if connection with client is closed
             while await self._client_serving_cycle(connection, client_endpoint_str):
                 pass
-        except Exception as err:
+        except BaseException as err:
             err_msg = err.args[0] if len(err.args) > 0 else ""
 
             logger.error(f"Client {client_endpoint_str}: {type(err).__name__}: {err_msg}")
             logger.error(traceback.format_exc())
+
+            raise
 
         logger.info(f"Disconnected client {client_endpoint_str}.")
 

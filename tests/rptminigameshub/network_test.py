@@ -340,12 +340,15 @@ class TestClientsListener:
         async def mocked_failed_client_serving_cycle(*_):
             """Throws an error when trying to serve client so we can test exceptions catching."""
 
-            raise RuntimeError()
+            raise asyncio.CancelledError()
 
         mocker.patch.object(server, "_client_serving_cycle", wraps=mocked_failed_client_serving_cycle)
 
-        # Handling this client will lead to loop being interrupted because of an error raised by the serving method
-        await server._handle_client(mocked_client_connection)
+        # Client error handling should only log errors, but should not suppress them as they might
+        # be required by coroutine caller
+        with pytest.raises(asyncio.CancelledError):
+            # Handling this client will lead to loop being interrupted because of an error raised by the serving method
+            await server._handle_client(mocked_client_connection)
 
         # At this point, error should have caused loop termination, then method exits and error should have been logged
         mocked_logger.error.assert_called()
