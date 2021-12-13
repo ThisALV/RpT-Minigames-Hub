@@ -68,6 +68,35 @@ class TestSubject:
         subject.next(1)
         assert subject.get_current() == 1
 
+    @pytest.mark.asyncio
+    async def test_many_subscribers(self):
+        subject = Subject()
+
+        # Awaits a new value and checks it is the expected one in that unit test
+        async def wait_new_value():
+            print("WAIT")
+            assert await subject.get_next() == 1
+            print("OK")
+
+        # Many subscribers are waiting for a value
+        wait_new_value_tasks = []
+        for _ in range(2):
+            wait_new_value_tasks.append(asyncio.create_task(wait_new_value()))
+
+        async def push_new_value():
+            # Gives hand to the two awaiter tasks before the value is pushed
+            for _ in range(2):
+                await asyncio.sleep(0)
+
+            print("PUSH")
+            subject.next(1)
+
+        await asyncio.gather(asyncio.create_task(push_new_value()), *wait_new_value_tasks)
+
+        # We should be able to push new values on stream
+        subject.next(0)
+        assert subject.get_current() == 0
+
 
 class TestServerResponseParsing:
     """Unit tests for different parse_availability_response() test cases."""
