@@ -51,8 +51,8 @@ class ClientsListener:
             # If the checkout operation failed, we have no status to assigns inside this server data se we keep the last status obtained
             if server_checkout_result is not None:
                 game_server_data["availability"] = {  # Updates status data inside this game server data
-                    "playersCount": server_checkout_result[0],  # 1st tuple element is number of players currently connected
-                    "playersLimit": server_checkout_result[1]  # 2nd tuple element is the maximum number of players accepted at the same time
+                    "currentActors": server_checkout_result[0],  # 1st tuple element is number of players currently connected
+                    "actorsLimit": server_checkout_result[1]  # 2nd tuple element is the maximum number of players accepted at the same time
                 }
 
     @staticmethod

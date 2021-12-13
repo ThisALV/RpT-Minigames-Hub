@@ -119,7 +119,7 @@ class TestClientsListener:
         assert server._current_servers_data == [
             {
                 "name": "Açores", "game": "A", "port": 35555, "availability": {
-                    "playersCount": 0, "playersLimit": 2
+                    "currentActors": 0, "actorsLimit": 2
                 }
             },
             {
@@ -127,7 +127,7 @@ class TestClientsListener:
             },
             {
                 "name": "Canaries", "game": "C", "port": 35559, "availability": {
-                    "playersCount": 2, "playersLimit": 2
+                    "currentActors": 2, "actorsLimit": 2
                 }
             }
         ]
@@ -141,17 +141,17 @@ class TestClientsListener:
         assert server._current_servers_data == [
             {
                 "name": "Açores", "game": "A", "port": 35555, "availability": {
-                    "playersCount": 1, "playersLimit": 2
+                    "currentActors": 1, "actorsLimit": 2
                 }
             },
             {
                 "name": "Bermudes", "game": "B", "port": 35557, "availability": {
-                    "playersCount": 0, "playersLimit": 2
+                    "currentActors": 0, "actorsLimit": 2
                 }
             },
             {
                 "name": "Canaries", "game": "C", "port": 35559, "availability": {
-                    "playersCount": 2, "playersLimit": 2  # Checkout failed (None value) so we keep the last status assigned
+                    "currentActors": 2, "actorsLimit": 2  # Checkout failed (None value) so we keep the last status assigned
                 }
             }
         ]
