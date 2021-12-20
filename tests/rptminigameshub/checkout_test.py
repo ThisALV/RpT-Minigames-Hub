@@ -8,37 +8,56 @@ import asyncio
 class TestSubject:
     """Unit tests for Subject methods."""
 
+    @staticmethod
+    async def wait_new_value(subject: Subject, val: int):
+        """Waits for a given subject to retrieve a value and checks if it is the expected value."""
+
+        assert await subject.get_next() == val
+        print("DONE!")
+
+    @staticmethod
+    async def push_new_value(subject: Subject, val: int, awaiters_to_run_before: int):
+        """Waits for a given number of tasks to be awaiting the subject's value, and pushes a value inside that given subject."""
+
+        for _ in range(awaiters_to_run_before):  # We run another coroutine for each awaiter that must await the subject before next() is called
+            await asyncio.sleep(0)
+
+        subject.next(val)
+
+    @staticmethod
+    def many_wait_new_value_tasks(subject: Subject, val: int, tasks_count: int):
+        """Creates requested number of tasks running the `wait_new_value` coroutine with the first 2 provided arguments."""
+
+        wait_new_value_tasks = []
+        for _ in range(tasks_count):
+            wait_new_value_tasks.append(asyncio.create_task(TestSubject.wait_new_value(subject, val)))
+
+        return wait_new_value_tasks
+
     @pytest.mark.asyncio
     async def test_ctor(self):
         subject = Subject()  # Calls class ctor
 
         assert subject.get_current() is None  # There isn't any value which has been pushed yet
-        with pytest.raises(asyncio.InvalidStateError):
-            subject.awaitable.result()  # Should throws error as no value is pushed on initial state
+        assert len(subject.awaitables) == 0  # There shouldn't be any subscriber at object initialization
 
     @pytest.mark.asyncio
     async def test_next(self):
         subject = Subject()
-        subject.next(0)  # Pushes a value into subject
 
-        assert subject.get_current() == 0  # Our current value (the most updated value which was pushed) should be that value we just pushed
-        with pytest.raises(asyncio.InvalidStateError):
-            subject.next(1)  # Should throws as current value hasn't been polled yes and is still inside the subject future
+        for val in range(2):
+            subject.next(val)  # Pushes a value into subject
+            assert subject.get_current() == val  # Our current value (the most updated value which was pushed) should be that value we just pushed
 
     @pytest.mark.asyncio
     async def test_get_next_finished(self):
         subject = Subject()
 
-        async def push_new_value():
-            await asyncio.sleep(0)  # Gives priority to the another coroutine so we ensure it is awaiting when we pushes the new value
-            subject.next(0)  # Pushes a new value into the subject
-
-        async def wait_new_value():
-            polled_value = await subject.get_next()  # Waits for the other coroutine to push its value into the subject
-            assert polled_value == 0  # This should be the value pushed by the other coroutine (push_new_value)
-
         # Pushes a value into the subject and test if it is polled as expected
-        await asyncio.gather(asyncio.create_task(push_new_value()), asyncio.create_task(wait_new_value()))
+        await asyncio.gather(
+            asyncio.create_task(TestSubject.push_new_value(subject, 0, 1)),
+            asyncio.create_task(TestSubject.wait_new_value(subject, 0))
+        )
 
         subject.next(1)  # We should now be able to push a new value as the previous one has been polled from the subject
         assert subject.get_current() == 1  # And the latest value should be updated as well
@@ -48,13 +67,13 @@ class TestSubject:
         subject = Subject()
 
         # Will be cancelled, so get_next await call will have to handle cancellation
-        async def wait_new_value():
+        async def wait_new_value_handling_cancellation():
             try:
                 await subject.get_next()
             except asyncio.CancelledError:  # Will be cancelled, but we do not want asyncio.gather to throw inside the unit test
                 pass
 
-        wait_new_value_task = asyncio.create_task(wait_new_value())
+        wait_new_value_task = asyncio.create_task(wait_new_value_handling_cancellation())
 
         # Will cancel wait_new_value coroutine
         async def cancel_waiting():
@@ -72,27 +91,45 @@ class TestSubject:
     async def test_many_subscribers(self):
         subject = Subject()
 
-        # Awaits a new value and checks it is the expected one in that unit test
-        async def wait_new_value():
-            assert await subject.get_next() == 1
-
-        # Many subscribers are waiting for a value
-        wait_new_value_tasks = []
-        for _ in range(2):
-            wait_new_value_tasks.append(asyncio.create_task(wait_new_value()))
-
-        async def push_new_value():
-            # Gives hand to the two awaiter tasks before the value is pushed
-            for _ in range(2):
-                await asyncio.sleep(0)
-
-            subject.next(1)
-
-        await asyncio.gather(asyncio.create_task(push_new_value()), *wait_new_value_tasks)
+        clients_count = 2
+        await asyncio.gather(
+            asyncio.create_task(TestSubject.push_new_value(subject, 1, clients_count)),  # Waits for 2 clients to be awaiting and pushed value 1
+            *TestSubject.many_wait_new_value_tasks(subject, 1, clients_count)  # Starts 2 clients awaiting and expecting the value 1
+        )
 
         # We should be able to push new values on stream
         subject.next(0)
         assert subject.get_current() == 0
+
+    @pytest.mark.asyncio
+    async def test_many_subscribers_cancelled(self):
+        subject = Subject()
+
+        clients_count = 2
+        wait_for_value_tasks = TestSubject.many_wait_new_value_tasks(subject, 1, clients_count)
+
+        async def cancel_client():
+            for _ in range(clients_count):  # Ensures clients are awaiting before task is cancelled
+                await asyncio.sleep(0)
+
+            wait_for_value_tasks[0].cancel()  # Cancels the 1st client that awaited the next value
+
+        clients_count = 2
+        try:
+            await asyncio.gather(
+                *wait_for_value_tasks,  # Starts 2 clients awaiting and expecting the value 1
+                cancel_client()  # Cancels the awaiting of the 1st client
+            )
+        except asyncio.CancelledError:  # A client will be cancelled on purpose
+            pass
+
+        assert wait_for_value_tasks[0].cancelled()  # Checks for the expected task to be cancelled
+        assert not wait_for_value_tasks[1].done()  # Meanwhile, the 2nd one should still be awaiting the value and not have been cancelled too
+
+        # Ensures Subject isn't broken
+        subject.next(0)  # We push a value for the awaiting 2nd client
+        await asyncio.sleep(0)  # We let its task handle the value by switching coroutine
+        assert subject.get_current() == 0  # Ensures it is the pushes value
 
 
 class TestServerResponseParsing:

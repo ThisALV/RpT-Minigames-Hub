@@ -50,14 +50,18 @@ class Subject:
         """Initializes subject with no subscriber and no values already pushed."""
 
         self.latest = None  # At beginning, there is no value, but trying to retrieve it is still a valid operation
-        self.awaitable = asyncio.Future()  # Awaitable low-lvl object to put values inside
+        self.awaitables: "dict[int, asyncio.Future]" = {}  # For each subscriber, a low-lvl awaitable is used to receive the next value pushed inside the subject
+
+        self._next_subscriber_uid = 0  # UID is easier to insert and remove the correct awaitable for a client
 
     def next(self, value):
         """Provides each subscriber with data given as argument. Raises InvalidStateError if a value is already pushed and hasn't
         been polled."""
 
-        self.awaitable.set_result(value)  # Provides awaitable object a value
-        self.latest = value  # If set_result hasn't throw then value has been pushed successfully and current one should be updated
+        for subscriber_awaitable in self.awaitables.values():
+            subscriber_awaitable.set_result(value)  # Provides each client awaitable object a value
+
+        self.latest = value  # If set_result hasn't thrown then value has been pushed successfully and current one should be updated
 
     def get_current(self):
         """Returns the latest value published inside this Subject instance, or None if no value has been provided yet."""
@@ -70,10 +74,15 @@ class Subject:
 
         Can be cancelled when awaiting, class instance will still be valid."""
 
+        # To identify the awaitable used for the current subscriber
+        subscriber_uid = self._next_subscriber_uid
+        self._next_subscriber_uid += 1
+
         try:  # Might be cancelled
-            polled_value = await self.awaitable  # Waits for a next value to be available
+            self.awaitables[subscriber_uid] = asyncio.Future()
+            polled_value = await self.awaitables[subscriber_uid]  # Waits for a next value to be available
         finally:  # Resets required even if cancelled, or class instance will no longer work
-            self.awaitable = asyncio.Future()  # Resets awaitable so there is no longer any value to retrieve
+            del self.awaitables[subscriber_uid] # Removes the awaitable as this subscriber received its awaited value
 
         return polled_value  # Retrieves the polled value to caller
 
